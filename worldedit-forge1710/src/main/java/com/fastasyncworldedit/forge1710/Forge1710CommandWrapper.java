@@ -25,9 +25,11 @@ import java.util.Optional;
 public class Forge1710CommandWrapper extends CommandBase {
 
     private final Command command;
+    private final List<String> extraAliases;
 
-    public Forge1710CommandWrapper(Command command) {
+    public Forge1710CommandWrapper(Command command, List<String> extraAliases) {
         this.command = command;
+        this.extraAliases = extraAliases;
     }
 
     static Actor actorFor(ICommandSender sender) {
@@ -44,7 +46,9 @@ public class Forge1710CommandWrapper extends CommandBase {
 
     @Override
     public List<String> getCommandAliases() {
-        return new ArrayList<>(command.getAliases());
+        List<String> aliases = new ArrayList<>(command.getAliases());
+        aliases.addAll(extraAliases);
+        return aliases;
     }
 
     @Override
@@ -76,7 +80,7 @@ public class Forge1710CommandWrapper extends CommandBase {
         }
         try {
             WorldEdit.getInstance().getEventBus().post(new CommandEvent(actorFor(sender), input.toString()));
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             LogManager.getLogger("FAWE-Forge1710").error("Error running WorldEdit command /" + input, e);
             throw e;
         }

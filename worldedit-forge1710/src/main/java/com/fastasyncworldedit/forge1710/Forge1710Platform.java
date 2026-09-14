@@ -32,7 +32,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -142,10 +144,34 @@ public class Forge1710Platform extends AbstractPlatform {
             return;
         }
         List<Command> all = manager.getAllCommands().collect(Collectors.toList());
-        for (Command command : all) {
-            commands.registerCommand(new Forge1710CommandWrapper(command));
+        Set<String> taken = new HashSet<>();
+        for (Object name : commands.getCommands().keySet()) {
+            taken.add(((String) name).toLowerCase(Locale.ROOT));
         }
-        LOGGER.info("Registered {} WorldEdit commands", all.size());
+        for (Command command : all) {
+            taken.add(command.getName().toLowerCase(Locale.ROOT));
+            command.getAliases().forEach(alias -> taken.add(alias.toLowerCase(Locale.ROOT)));
+        }
+        int slashAliases = 0;
+        for (Command command : all) {
+            // Bukkit hybrids (Crucible/Thermos) pass "//wand" to the vanilla handler as "/wand", which strips one more
+            // slash and looks up "wand". Register the single-slash name as an alias when nothing else uses it, so
+            // "//wand" works on hybrids as well as on plain Forge.
+            List<String> extra = new ArrayList<>();
+            List<String> names = new ArrayList<>(command.getAliases());
+            names.add(command.getName());
+            for (String name : names) {
+                if (name.startsWith("/") && name.length() > 1) {
+                    String stripped = name.substring(1).toLowerCase(Locale.ROOT);
+                    if (taken.add(stripped)) {
+                        extra.add(stripped);
+                    }
+                }
+            }
+            slashAliases += extra.size();
+            commands.registerCommand(new Forge1710CommandWrapper(command, extra));
+        }
+        LOGGER.info("Registered {} WorldEdit commands ({} single-slash aliases)", all.size(), slashAliases);
     }
 
     @Override

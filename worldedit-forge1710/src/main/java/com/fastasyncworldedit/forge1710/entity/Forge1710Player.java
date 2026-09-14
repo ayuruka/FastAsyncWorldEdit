@@ -25,6 +25,7 @@ import org.apache.logging.log4j.Logger;
 import javax.annotation.Nullable;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 public class Forge1710Player extends AbstractPlayerActor {
 
@@ -34,6 +35,9 @@ public class Forge1710Player extends AbstractPlayerActor {
      * On by default while the port is being tested; disable with -Dfawe.forge1710.logchat=false.
      */
     private static final boolean LOG_CHAT = Boolean.parseBoolean(System.getProperty("fawe.forge1710.logchat", "true"));
+
+    // EnumChatFormatting.getTextWithoutFormattingCodes is client-only in 1.7.10.
+    private static final Pattern FORMATTING_CODE = Pattern.compile("(?i)§[0-9a-fk-or]");
 
     private final EntityPlayerMP player;
 
@@ -131,7 +135,7 @@ public class Forge1710Player extends AbstractPlayerActor {
 
     private void send(String msg, @Nullable EnumChatFormatting color) {
         if (LOG_CHAT) {
-            LOGGER.info("[-> {}] {}", getName(), EnumChatFormatting.getTextWithoutFormattingCodes(msg));
+            LOGGER.info("[-> {}] {}", getName(), FORMATTING_CODE.matcher(msg).replaceAll(""));
         }
         for (String part : msg.split("\n")) {
             ChatComponentText text = new ChatComponentText(part);
