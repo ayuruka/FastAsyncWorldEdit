@@ -62,8 +62,31 @@ public class Forge1710GetBlocks extends CharGetBlocks {
         this.chunkZ = chunkZ;
     }
 
+    // Readers only live for one edit (see Forge1710QueueHandler), so keeping the chunk avoids a server-thread round
+    // trip for every hasSection/update call.
+    private volatile Chunk chunk;
+
     private Chunk chunk() {
-        return world.getChunk(chunkX, chunkZ);
+        Chunk local = chunk;
+        if (local == null) {
+            local = world.getChunk(chunkX, chunkZ);
+            chunk = local;
+        }
+        return local;
+    }
+
+    /**
+     * FAWE only loads sections that report existing data; the inherited implementation only knows about sections that
+     * were already loaded, so every unloaded section read as air.
+     */
+    @Override
+    public boolean hasSection(int layer) {
+        return layer >= 0 && layer < SECTIONS && chunk().getBlockStorageArray()[layer] != null;
+    }
+
+    @Override
+    public boolean hasNonEmptySection(int layer) {
+        return hasSection(layer);
     }
 
     @Override

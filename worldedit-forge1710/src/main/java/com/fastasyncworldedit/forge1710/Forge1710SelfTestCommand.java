@@ -36,7 +36,7 @@ public class Forge1710SelfTestCommand extends CommandBase {
 
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/faweselftest [modBlockId]";
+        return "/faweselftest [modBlockId] | /faweselftest native <x1> <y1> <z1> <x2> <y2> <z2>";
     }
 
     @Override
@@ -46,8 +46,42 @@ public class Forge1710SelfTestCommand extends CommandBase {
 
     @Override
     public void processCommand(ICommandSender sender, String[] args) {
+        if (args.length == 7 && args[0].equals("native")) {
+            nativeCount(sender, args);
+            return;
+        }
         String modBlock = args.length > 0 ? args[0] : null;
         TaskManager.taskManager().async(() -> run(modBlock));
+    }
+
+    /**
+     * Counts blocks straight from the Minecraft world (bypassing FAWE), so automated tests can check what an edit
+     * really wrote. Runs on the server thread. Replies with "[SELFTEST] native <volume>: id:meta=count, ...".
+     */
+    private static void nativeCount(ICommandSender sender, String[] args) {
+        int x1 = Integer.parseInt(args[1]);
+        int y1 = Integer.parseInt(args[2]);
+        int z1 = Integer.parseInt(args[3]);
+        int x2 = Integer.parseInt(args[4]);
+        int y2 = Integer.parseInt(args[5]);
+        int z2 = Integer.parseInt(args[6]);
+        net.minecraft.world.World world = sender.getEntityWorld();
+        java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
+        int volume = 0;
+        for (int x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+            for (int y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+                for (int z = Math.min(z1, z2); z <= Math.max(z1, z2); z++) {
+                    Block block = world.getBlock(x, y, z);
+                    String key = Block.blockRegistry.getNameForObject(block) + ":" + world.getBlockMetadata(x, y, z);
+                    counts.merge(key, 1, Integer::sum);
+                    volume++;
+                }
+            }
+        }
+        StringBuilder text = new StringBuilder("[SELFTEST] native ").append(volume).append(':');
+        counts.forEach((key, count) -> text.append(' ').append(key).append('=').append(count));
+        LOGGER.info(text.toString());
+        sender.addChatMessage(new net.minecraft.util.ChatComponentText(text.toString()));
     }
 
     private static <T> T sync(Supplier<T> supplier) {

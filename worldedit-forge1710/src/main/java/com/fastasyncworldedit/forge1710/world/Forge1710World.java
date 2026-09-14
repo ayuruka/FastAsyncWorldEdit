@@ -95,6 +95,25 @@ public class Forge1710World extends AbstractWorld {
         return name;
     }
 
+    // FAWE wraps worlds (WorldWrapper delegates equals to its parent), and LocalSession clears the selection whenever
+    // the selector's world is not equal to the command's world. Identity equality made every //pos1 reset the
+    // selection, so compare by world name like BukkitWorld does.
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (other instanceof Forge1710World otherWorld) {
+            return name.equals(otherWorld.name);
+        }
+        return other instanceof com.sk89q.worldedit.world.World otherWorld && name.equals(otherWorld.getName());
+    }
+
+    @Override
+    public int hashCode() {
+        return name.hashCode();
+    }
+
     @Override
     public String id() {
         return name.replace(" ", "_").toLowerCase(Locale.ROOT);
@@ -283,17 +302,6 @@ public class Forge1710World extends AbstractWorld {
     @Override
     public boolean tile(int x, int y, int z, FaweCompoundTag tile) {
         return false;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-        return other instanceof Forge1710World that && that.worldRef.get() == worldRef.get();
-    }
-
-    @Override
-    public int hashCode() {
-        WorldServer world = worldRef.get();
-        return world == null ? 0 : System.identityHashCode(world);
     }
 
     @Override
