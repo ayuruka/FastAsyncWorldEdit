@@ -9,6 +9,7 @@ import com.sk89q.worldedit.internal.util.Substring;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
+import org.apache.logging.log4j.LogManager;
 import org.enginehub.piston.Command;
 import org.enginehub.piston.inject.InjectedValueStore;
 import org.enginehub.piston.inject.Key;
@@ -73,7 +74,12 @@ public class Forge1710CommandWrapper extends CommandBase {
         for (String arg : args) {
             input.append(' ').append(arg);
         }
-        WorldEdit.getInstance().getEventBus().post(new CommandEvent(actorFor(sender), input.toString()));
+        try {
+            WorldEdit.getInstance().getEventBus().post(new CommandEvent(actorFor(sender), input.toString()));
+        } catch (RuntimeException e) {
+            LogManager.getLogger("FAWE-Forge1710").error("Error running WorldEdit command /" + input, e);
+            throw e;
+        }
     }
 
     @Override

@@ -111,6 +111,14 @@ public class FaweForge1710Mod {
                 || !(event.entityPlayer instanceof EntityPlayerMP playerMP)) {
             return;
         }
+        try {
+            handleInteract(event, playerMP);
+        } catch (Throwable t) {
+            logger.error("Error handling WorldEdit interaction for " + playerMP.getCommandSenderName(), t);
+        }
+    }
+
+    private void handleInteract(PlayerInteractEvent event, EntityPlayerMP playerMP) {
         WorldEdit we = WorldEdit.getInstance();
         Forge1710Player player = Forge1710Adapter.adapt(playerMP);
         switch (event.action) {

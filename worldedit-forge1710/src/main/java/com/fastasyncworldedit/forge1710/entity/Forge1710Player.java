@@ -19,12 +19,21 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.world.WorldServer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nullable;
 import java.util.Locale;
 import java.util.UUID;
 
 public class Forge1710Player extends AbstractPlayerActor {
+
+    private static final Logger LOGGER = LogManager.getLogger("FAWE-Forge1710");
+    /**
+     * Mirrors every message sent to a player into the server log, so problems can be diagnosed from the log alone.
+     * On by default while the port is being tested; disable with -Dfawe.forge1710.logchat=false.
+     */
+    private static final boolean LOG_CHAT = Boolean.parseBoolean(System.getProperty("fawe.forge1710.logchat", "true"));
 
     private final EntityPlayerMP player;
 
@@ -121,6 +130,9 @@ public class Forge1710Player extends AbstractPlayerActor {
     }
 
     private void send(String msg, @Nullable EnumChatFormatting color) {
+        if (LOG_CHAT) {
+            LOGGER.info("[-> {}] {}", getName(), EnumChatFormatting.getTextWithoutFormattingCodes(msg));
+        }
         for (String part : msg.split("\n")) {
             ChatComponentText text = new ChatComponentText(part);
             if (color != null) {

@@ -18,6 +18,8 @@ import java.util.Map;
 
 public class Forge1710ItemRegistry implements ItemRegistry {
 
+    private static final String AIR_ID = "minecraft:air";
+
     private volatile Map<String, Item> itemsById;
 
     public Map<String, Item> items() {
@@ -27,6 +29,8 @@ public class Forge1710ItemRegistry implements ItemRegistry {
                 local = itemsById;
                 if (local == null) {
                     local = new LinkedHashMap<>();
+                    // 1.7.10 has no air item, but FAWE needs ItemTypes.AIR for empty hands and stacks.
+                    local.put(AIR_ID, null);
                     for (Object o : GameData.getItemRegistry()) {
                         Item item = (Item) o;
                         String name = GameData.getItemRegistry().getNameForObject(item);
@@ -37,7 +41,9 @@ public class Forge1710ItemRegistry implements ItemRegistry {
                         if (id.indexOf(':') < 0) {
                             id = "minecraft:" + id;
                         }
-                        local.putIfAbsent(id, item);
+                        if (!local.containsKey(id)) {
+                            local.put(id, item);
+                        }
                     }
                     itemsById = local;
                 }
