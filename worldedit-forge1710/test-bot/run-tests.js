@@ -3,7 +3,7 @@
 //
 //   node run-tests.js [--start-server] [--auth offline|microsoft] [--username NAME]
 //                     [--driver mineflayer|raw] [--host 127.0.0.1] [--port 25599] [--keep-server]
-//                     [--suite basic|data|transform|features|all|smoke] [--commands "cmd1;cmd2"] [--locale ja_JP]
+//                     [--suite basic|data|transform|features|snapshot|blockbag|all|smoke] [--commands "cmd1;cmd2"] [--locale ja_JP]
 //                     [--server-dir DIR] [--java PATH] [--thread-dump] [--debug-queue]
 //
 // --start-server  launches the test server (and stops it afterwards unless --keep-server)
@@ -645,6 +645,154 @@ async function runFeatureTests (session) {
 }
 
 /**
+ * Snapshots: the bot builds something, the world is saved and its region files are copied into the snapshot directory
+ * (a legacy "<world>/<date>" folder snapshot), then the area is destroyed and //restore -b -e brings back blocks, the
+ * chest contents, the biome and the entity from the copied region files.
+ */
+const SNAPSHOT_DIR = path.join(SERVER_DIR, 'fawe-snapshots')
+
+function ensureSnapshotConfig () {
+  const file = path.join(SERVER_DIR, 'config', 'worldedit', 'worldedit.properties')
+  const wanted = `snapshots-dir=${SNAPSHOT_DIR.replace(/\\/g, '/')}`
+  const text = fs.readFileSync(file, 'utf8')
+  if (!text.includes(wanted)) {
+    fs.writeFileSync(file, text.replace(/^snapshots-dir=.*$/m, wanted))
+    log(`configured ${wanted}`)
+  }
+}
+
+function copySnapshot (worldName) {
+  const d = new Date()
+  const p2 = (n) => String(n).padStart(2, '0')
+  const name = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}`
+  fs.rmSync(path.join(SNAPSHOT_DIR, worldName), { recursive: true, force: true })
+  const target = path.join(SNAPSHOT_DIR, worldName, name)
+  fs.mkdirSync(path.join(target, 'region'), { recursive: true })
+  const source = path.join(SERVER_DIR, worldName)
+  fs.copyFileSync(path.join(source, 'level.dat'), path.join(target, 'level.dat'))
+  for (const f of fs.readdirSync(path.join(source, 'region'))) {
+    fs.copyFileSync(path.join(source, 'region', f), path.join(target, 'region', f))
+  }
+  return name
+}
+
+async function runSnapshotTests (session) {
+  const pos = session.position
+  const P = [Math.floor(pos.x), Math.floor(pos.z)]
+  const joined = (r) => r.join(' | ') || 'no reply'
+  const selftest = async (a, marker) => {
+    const r = await command(session, `/faweselftest ${a}`, { until: new RegExp(`\\[SELFTEST\\] ${marker}`) })
+    return r.find(t => t.includes(`[SELFTEST] ${marker}`)) || ''
+  }
+  const scan = async (a, b) => {
+    const line = await selftest(`native ${a.join(' ')} ${b.join(' ')}`, 'native')
+    const out = {}
+    for (const m of line.matchAll(/(\S+:\d+)=(\d+)/g)) out[m[1].toLowerCase()] = Number(m[2])
+    return { line, count: (prefix) => Object.entries(out).filter(([k]) => k.startsWith(prefix)).reduce((n, [, v]) => n + v, 0) }
+  }
+  const select = async (a, b) => {
+    await command(session, `//pos1 ${a.join(',')}`)
+    await command(session, `//pos2 ${b.join(',')}`)
+  }
+  const done = /completed|changed|affected|created|removed|replaced|error|exception/i
+  const S1 = [P[0] - 40, 200, P[1] + 30]
+  const S2 = [P[0] - 36, 204, P[1] + 34]
+  const stoneTop = [S2[0], 202, S2[2]]
+  const chest = [S1[0], 200, S1[2]]
+  const chestOk = (line) => /Items/.test(line) && /id:264s/.test(line) && /Count:7b/.test(line)
+  const crystals = (line) => { const m = line.match(/EnderCrystal=(\d+)/); return m ? Number(m[1]) : 0 }
+
+  await select(S1, S2)
+  await command(session, '//cut -e', { until: /cut|error/i, maxMs: 60000 })
+  await command(session, '//setbiome minecraft:jungle', { until: /biome|error/i, maxMs: 60000 })
+  await select(S1, stoneTop)
+  await command(session, '//set stone', { until: done })
+  await command(session, `/setblock ${chest.join(' ')} chest 0 replace {Items:[{Slot:0b,id:264s,Count:7b,Damage:0s}]}`)
+  await command(session, `/summon EnderCrystal ${S1[0] + 2.5} 203 ${S1[2] + 2.5}`)
+  await sleep(1000)
+
+  let r = await command(session, '/save-all', { until: /Saved the world|Save complete/i, maxMs: 60000 })
+  await sleep(5000)
+  const snapName = copySnapshot('fawe-test')
+  record('snapshot copied from the saved world', r.some(t => /Saved|Save complete/i.test(t)), `${joined(r)} / ${snapName}`)
+
+  await select(S1, S2)
+  await command(session, '//cut -e', { until: /cut|error/i, maxMs: 60000 })
+  await command(session, '//setbiome minecraft:desert', { until: /biome|error/i, maxMs: 60000 })
+  await select(S1, stoneTop)
+  await command(session, '//set glass', { until: done })
+  await sleep(1500)
+
+  r = await command(session, '//snapshot list', { until: /snapshot|error|none/i })
+  record('//snapshot list shows the copied snapshot', r.some(t => t.includes(snapName)), joined(r))
+
+  await select(S1, S2)
+  r = await command(session, '//restore -b -e', { until: /restored|error|not|missing/i, maxMs: 120000 })
+  await sleep(2000)
+  let s = await scan(S1, stoneTop)
+  record('//restore brings the blocks back (native)', s.count('minecraft:stone:') === 74 && s.count('minecraft:glass:') === 0,
+    `${joined(r)} / ${s.line}`)
+  let line = await selftest(`tile ${chest.join(' ')}`, 'tile')
+  record('//restore brings the chest contents back (native)', chestOk(line), line)
+  line = await selftest(`biome ${S1[0]} ${S1[2]}`, 'biome')
+  record('//restore -b brings the biome back (native)', /Jungle/.test(line), line)
+  line = await selftest(`entities ${S1.join(' ')} ${S2.join(' ')}`, 'entities')
+  record('//restore -e brings the entity back (native)', crystals(line) === 1, line)
+
+  r = await command(session, '//undo', { until: /Undid|nothing|error/i, maxMs: 60000 })
+  await sleep(2000)
+  s = await scan(S1, stoneTop)
+  record('undo //restore puts the glass back (native)', s.count('minecraft:glass:') === 75, `${joined(r)} / ${s.line}`)
+  await select(S1, S2)
+  await command(session, '//cut -e', { until: /cut|error/i, maxMs: 60000 })
+}
+
+/** Survival inventory as block source (limits inventory-mode 1/2), through /faweselftest blockbag. */
+async function runBlockBagTests (session) {
+  const pos = session.position
+  const P = [Math.floor(pos.x), Math.floor(pos.z)]
+  const joined = (r) => r.join(' | ') || 'no reply'
+  const B1 = [P[0] - 50, 210, P[1] - 50]
+  const B2 = [P[0] - 46, 210, P[1] - 46]
+  const area = `${B1.join(' ')} ${B2.join(' ')}`
+  const bag = async (mode, block) => {
+    const r = await command(session, `/faweselftest blockbag ${mode} ${area} ${block}`, { until: /\[SELFTEST\] blockbag/, maxMs: 60000 })
+    return r.find(t => t.includes('[SELFTEST] blockbag')) || joined(r)
+  }
+  const count = async (key) => {
+    const r = await command(session, `/faweselftest native ${area}`, { until: /\[SELFTEST\] native/ })
+    const line = r.find(t => t.includes('[SELFTEST] native')) || ''
+    const m = line.match(new RegExp(key.replace(/[.]/g, '\\.') + '=(\\d+)'))
+    return { n: m ? Number(m[1]) : 0, line }
+  }
+  const cleared = async () => {
+    const r = await command(session, `/clear ${USERNAME}`)
+    const m = joined(r).match(/removing (\d+)/i)
+    return m ? Number(m[1]) : 0
+  }
+
+  await command(session, `//pos1 ${B1.join(',')}`)
+  await command(session, `//pos2 ${B2.join(',')}`)
+  await command(session, '//set air', { until: /changed|affected|error/i })
+  await cleared()
+  await command(session, `/give ${USERNAME} wool 10 1`)
+  await sleep(500)
+
+  let line = await bag(2, 'orange_wool')
+  await sleep(1500)
+  let c = await count('minecraft:wool:1')
+  record('inventory mode 2: 10 orange wool in the inventory place 10 blocks', c.n === 10, `${line} / ${c.line}`)
+  let left = await cleared()
+  record('inventory mode 2 takes the placed items from the inventory', left === 0, `${left} items left`)
+
+  line = await bag(1, 'air')
+  await sleep(1500)
+  c = await count('minecraft:wool:1')
+  left = await cleared()
+  record('inventory mode 1: removing blocks gives the items back', c.n === 0 && left === 10, `${line} / ${c.line} / ${left} items returned`)
+}
+
+/**
  * Runs many commands once to find features that are not ported yet: a command fails if it gives no reply or its reply
  * looks like an error. Server-side exceptions are collected from the server log by the caller.
  */
@@ -688,6 +836,7 @@ async function main () {
       if (await waitForServer(1)) {
         throw new Error(`a server is already answering on ${HOST}:${PORT}; stop it first (or run without --start-server)`)
       }
+      ensureSnapshotConfig()
       log(`starting test server in ${SERVER_DIR}`)
       server = startServer()
     }
@@ -721,6 +870,8 @@ async function main () {
       if (suite === 'all' || suite === 'data') await runDataTests(session)
       if (suite === 'all' || suite === 'transform') await runTransformTests(session)
       if (suite === 'all' || suite === 'features') await runFeatureTests(session)
+      if (suite === 'all' || suite === 'snapshot') await runSnapshotTests(session)
+      if (suite === 'all' || suite === 'blockbag') await runBlockBagTests(session)
       if (suite === 'smoke') await runSmokeTests(session)
     }
     session.client.end('tests finished')

@@ -21,11 +21,16 @@ package com.sk89q.worldedit.world.chunk;
 
 import com.sk89q.jnbt.CompoundTag;
 import com.sk89q.worldedit.WorldEdit;
+import com.sk89q.worldedit.entity.BaseEntity;
 import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.util.concurrency.LazyReference;
 import com.sk89q.worldedit.world.DataException;
+import com.sk89q.worldedit.world.biome.BiomeType;
 import com.sk89q.worldedit.world.block.BaseBlock;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockTypes;
+import com.sk89q.worldedit.world.entity.EntityType;
+import com.sk89q.worldedit.world.entity.EntityTypes;
 import com.sk89q.worldedit.world.registry.LegacyMapper;
 import com.sk89q.worldedit.world.storage.InvalidFormatException;
 import org.enginehub.linbus.tree.LinCompoundTag;
@@ -35,7 +40,11 @@ import org.enginehub.linbus.tree.LinTag;
 import org.enginehub.linbus.tree.LinTagType;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class AnvilChunk implements Chunk {
@@ -43,6 +52,10 @@ public class AnvilChunk implements Chunk {
     private final LinCompoundTag rootTag;
     private final byte[][] blocks;
     private final byte[][] blocksAdd;
+    //FAWE start - EndlessIDs (1.7.10) stores id bits 12-15 in "BlocksB2Hi" and bits 16-23 in "BlocksB3"
+    private final byte[][] blocksB2High;
+    private final byte[][] blocksB3;
+    //FAWE end
     private final byte[][] data;
     private final int rootX;
     private final int rootZ;
@@ -75,6 +88,10 @@ public class AnvilChunk implements Chunk {
 
         blocks = new byte[16][16 * 16 * 16];
         blocksAdd = new byte[16][16 * 16 * 8];
+        //FAWE start
+        blocksB2High = new byte[16][];
+        blocksB3 = new byte[16][];
+        //FAWE end
         data = new byte[16][16 * 16 * 8];
 
         LinListTag<LinTag<?>> sections = rootTag.getTag("Sections", LinTagType.listTag());
@@ -102,6 +119,16 @@ public class AnvilChunk implements Chunk {
             if (addTag != null) {
                 blocksAdd[y] = addTag.value();
             }
+            //FAWE start
+            var b2HighTag = sectionTag.findTag("BlocksB2Hi", LinTagType.byteArrayTag());
+            if (b2HighTag != null && b2HighTag.value().length == 16 * 16 * 8) {
+                blocksB2High[y] = b2HighTag.value();
+            }
+            var b3Tag = sectionTag.findTag("BlocksB3", LinTagType.byteArrayTag());
+            if (b3Tag != null && b3Tag.value().length == 16 * 16 * 16) {
+                blocksB3[y] = b3Tag.value();
+            }
+            //FAWE end
         }
 
         int sectionsize = 16 * 16 * 16;
@@ -145,11 +172,27 @@ public class AnvilChunk implements Chunk {
             byte addByte = blocksAdd[section][index >> 1];
             int addId = (index & 1) == 0 ? (addByte & 0x0F) << 8 : (addByte & 0xF0) << 4;
 
-            return (blocks[section][index] & 0xFF) + addId;
+            //FAWE start
+            int id = (blocks[section][index] & 0xFF) + addId;
+            if (blocksB2High[section] != null) {
+                id |= nibble(blocksB2High[section], index) << 12;
+            }
+            if (blocksB3[section] != null) {
+                id |= (blocksB3[section][index] & 0xFF) << 16;
+            }
+            return id;
+            //FAWE end
         } catch (IndexOutOfBoundsException e) {
             throw new DataException("Chunk does not contain position " + position);
         }
     }
+
+    //FAWE start
+    private static int nibble(byte[] array, int index) {
+        byte value = array[index >> 1];
+        return (index & 1) == 0 ? value & 0x0F : (value & 0xF0) >> 4;
+    }
+    //FAWE end
 
     private int getBlockData(BlockVector3 position) throws DataException {
         int x = position.x() - rootX * 16;
@@ -179,12 +222,13 @@ public class AnvilChunk implements Chunk {
      * Used to load the tile entities.
      */
     private void populateTileEntities() {
-        LinListTag<LinCompoundTag> tags = rootTag.getTag("TileEntities", LinTagType.listTag())
-            .asTypeChecked(LinTagType.compoundTag());
+        //FAWE start - 1.7.10 writes empty lists with element type END
+        List<LinCompoundTag> tags = compoundList("TileEntities");
+        //FAWE end
 
-        tileEntities = new HashMap<>(tags.value().size());
+        tileEntities = new HashMap<>(tags.size());
 
-        for (LinCompoundTag t : tags.value()) {
+        for (LinCompoundTag t : tags) {
             int x = 0;
             int y = 0;
             int z = 0;
@@ -239,6 +283,97 @@ public class AnvilChunk implements Chunk {
 
         return tileEntities.get(position);
     }
+
+    //FAWE start - 1.7.10 biomes: vanilla "Biomes" (byte per column) or EndlessIDs "Biomes16v2" (little-endian short)
+    private int[] biomes;
+
+    @Override
+    public BiomeType getBiome(BlockVector3 position) throws DataException {
+        if (biomes == null) {
+            biomes = new int[256];
+            Arrays.fill(biomes, -1);
+            var biomes16 = rootTag.findTag("Biomes16v2", LinTagType.byteArrayTag());
+            var biomes8 = rootTag.findTag("Biomes", LinTagType.byteArrayTag());
+            if (biomes16 != null && biomes16.value().length == 512) {
+                byte[] raw = biomes16.value();
+                for (int i = 0; i < 256; i++) {
+                    biomes[i] = (raw[i * 2] & 0xFF) | (raw[i * 2 + 1] & 0xFF) << 8;
+                }
+            } else if (biomes8 != null && biomes8.value().length == 256) {
+                byte[] raw = biomes8.value();
+                for (int i = 0; i < 256; i++) {
+                    biomes[i] = raw[i] & 0xFF;
+                }
+            }
+        }
+        int x = position.x() - rootX * 16;
+        int z = position.z() - rootZ * 16;
+        if (x < 0 || x >= 16 || z < 0 || z >= 16) {
+            throw new DataException("Chunk does not contain position " + position);
+        }
+        int id = biomes[z * 16 + x];
+        return id < 0 ? null : legacyBiome(id);
+    }
+
+    private List<BaseEntity> entities;
+
+    /** A list of compounds; missing or empty lists (1.7.10 stores those with element type END) are empty. */
+    @SuppressWarnings("unchecked")
+    private List<LinCompoundTag> compoundList(String name) {
+        LinListTag<?> list = rootTag.findTag(name, LinTagType.listTag());
+        if (list == null || list.value().isEmpty()) {
+            return List.of();
+        }
+        return list.asTypeChecked(LinTagType.compoundTag()).value();
+    }
+
+    @Override
+    public List<BaseEntity> getEntities() throws DataException {
+        if (entities == null) {
+            List<BaseEntity> list = new ArrayList<>();
+            for (LinCompoundTag tag : compoundList("Entities")) {
+                var idTag = tag.findTag("id", LinTagType.stringTag());
+                EntityType type = idTag == null ? null : EntityTypes.get(legacyEntityId(idTag.value()));
+                if (type != null) {
+                    list.add(new BaseEntity(type, LazyReference.computed(tag)));
+                }
+            }
+            entities = list;
+        }
+        return entities;
+    }
+
+    /**
+     * 1.7.10 entity names ("Pig", "RTM.Train") to namespaced ids ("minecraft:pig", "rtm:train").
+     */
+    private static String legacyEntityId(String name) {
+        if (name.indexOf(':') >= 0) {
+            return name.toLowerCase(Locale.ROOT);
+        }
+        String namespace = "minecraft";
+        String path = name;
+        int dot = name.indexOf('.');
+        if (dot > 0 && dot < name.length() - 1) {
+            namespace = name.substring(0, dot);
+            path = name.substring(dot + 1);
+        }
+        return cleanId(namespace) + ":" + cleanId(path);
+    }
+
+    private static String cleanId(String s) {
+        return s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_./-]+", "_");
+    }
+
+    @Nullable
+    private static BiomeType legacyBiome(int legacyId) {
+        for (BiomeType type : BiomeType.REGISTRY.values()) {
+            if (type.getLegacyId() == legacyId) {
+                return type;
+            }
+        }
+        return null;
+    }
+    //FAWE end
 
     @Override
     public BaseBlock getBlock(BlockVector3 position) throws DataException {

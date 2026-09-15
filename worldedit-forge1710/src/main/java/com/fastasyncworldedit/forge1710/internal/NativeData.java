@@ -6,7 +6,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityList;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import org.apache.logging.log4j.LogManager;
@@ -102,13 +101,8 @@ public final class NativeData {
             if (entity == null) {
                 return null;
             }
-            NBTTagList pos = tag.getTagList("Pos", 6);
-            if (pos.tagCount() == 3) {
-                NBTTagList rotation = tag.getTagList("Rotation", 5);
-                float yaw = rotation.tagCount() == 2 ? rotation.func_150308_e(0) : entity.rotationYaw;
-                float pitch = rotation.tagCount() == 2 ? rotation.func_150308_e(1) : entity.rotationPitch;
-                entity.setLocationAndAngles(pos.func_150309_d(0), pos.func_150309_d(1), pos.func_150309_d(2), yaw, pitch);
-            }
+            // readFromNBT already placed the entity from "Pos"/"Rotation"; setLocationAndAngles would add yOffset again
+            // (an EnderCrystal rose one block on every copy).
             return world.spawnEntityInWorld(entity) ? entity : null;
         } catch (Throwable t) {
             LOGGER.warn("Could not create entity from {}", data, t);

@@ -85,6 +85,10 @@ public class Forge1710SelfTestCommand extends CommandBase {
             reply(sender, "[SELFTEST] biome " + x + " " + z + ": " + (biome == null ? "null" : biome.biomeName));
             return;
         }
+        if (args.length == 9 && args[0].equals("blockbag") && sender instanceof net.minecraft.entity.player.EntityPlayerMP player) {
+            TaskManager.taskManager().async(() -> blockBag(player, args));
+            return;
+        }
         String modBlock = args.length > 0 ? args[0] : null;
         TaskManager.taskManager().async(() -> run(modBlock));
     }
@@ -117,6 +121,48 @@ public class Forge1710SelfTestCommand extends CommandBase {
         counts.forEach((key, count) -> text.append(' ').append(key).append('=').append(count));
         LOGGER.info(text.toString());
         sender.addChatMessage(new net.minecraft.util.ChatComponentText(text.toString()));
+    }
+
+    /**
+     * "blockbag <inventory mode> x1 y1 z1 x2 y2 z2 <block>": sets the region through an edit session that uses the
+     * player's inventory ({@code limits.inventory-mode} 1 or 2), like a player without {@code fawe.limit.unlimited}.
+     * Replies "[SELFTEST] blockbag changed=N missing={type=count}" (chunks may still be charged after the reply, so
+     * the missing counts can be incomplete; check the world and the inventory).
+     */
+    private static void blockBag(net.minecraft.entity.player.EntityPlayerMP player, String[] args) {
+        String text;
+        try {
+            com.sk89q.worldedit.entity.Player actor = Forge1710Adapter.adapt(player);
+            com.fastasyncworldedit.core.limit.FaweLimit limit = com.fastasyncworldedit.core.limit.FaweLimit.MAX.copy();
+            limit.INVENTORY_MODE = Integer.parseInt(args[1]);
+            BlockVector3 a = BlockVector3.at(Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4]));
+            BlockVector3 b = BlockVector3.at(Integer.parseInt(args[5]), Integer.parseInt(args[6]), Integer.parseInt(args[7]));
+            com.sk89q.worldedit.extension.input.ParserContext context = new com.sk89q.worldedit.extension.input.ParserContext();
+            context.setActor(actor);
+            context.setWorld(actor.getWorld());
+            BlockState state = WorldEdit.getInstance().getBlockFactory().parseFromInput(args[8], context).toImmutableState();
+            java.util.Map<com.sk89q.worldedit.world.block.BlockType, Integer> missing;
+            int changed;
+            try (EditSession edit = WorldEdit.getInstance().newEditSessionBuilder().world(actor.getWorld()).actor(actor)
+                    .limit(limit).blockBag(actor.getInventoryBlockBag()).build()) {
+                try {
+                    edit.setBlocks((Region) new CuboidRegion(a, b), state);
+                } catch (RuntimeException e) {
+                    if (e != com.fastasyncworldedit.core.FaweCache.BLOCK_BAG) {
+                        throw e;
+                    }
+                }
+                edit.flushQueue();
+                changed = edit.getBlockChangeCount();
+                missing = edit.popMissingBlocks();
+            }
+            text = "[SELFTEST] blockbag changed=" + changed + " missing=" + missing;
+        } catch (Throwable t) {
+            LOGGER.warn("blockbag self test failed", t);
+            text = "[SELFTEST] blockbag error " + t;
+        }
+        String reply = text;
+        TaskManager.taskManager().task(() -> reply(player, reply));
     }
 
     private static void reply(ICommandSender sender, String text) {

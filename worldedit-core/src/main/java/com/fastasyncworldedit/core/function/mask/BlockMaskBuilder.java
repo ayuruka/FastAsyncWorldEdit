@@ -179,6 +179,8 @@ public class BlockMaskBuilder {
         }
     }
 
+    private static final long REGEX_TIMEOUT_MS = 2000;
+
     public BlockMaskBuilder addRegex(final String input) throws InputParseException {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         Future<?> fut = executor.submit(() -> {
@@ -318,12 +320,22 @@ public class BlockMaskBuilder {
             }
         });
         try {
-            fut.get(5L, TimeUnit.MILLISECONDS);
+            //FAWE start - the parse runs on another thread only to stop runaway regular expressions. Waiting 5 ms and then
+            // returning the builder unchanged turned plain inputs like "stone" into an empty (always false) mask whenever
+            // the thread was slow to start, so //replace stone glass could silently replace nothing.
+            fut.get(REGEX_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof InputParseException) {
                 throw (InputParseException) e.getCause();
             }
-        } catch (InterruptedException | TimeoutException ignored) {
+        } catch (TimeoutException e) {
+            fut.cancel(true);
+            throw new InputParseException(Caption.of("fawe.error.no-block-found", TextComponent.of(input)));
+        } catch (InterruptedException e) {
+            fut.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new InputParseException(Caption.of("fawe.error.no-block-found", TextComponent.of(input)));
+            //FAWE end
         } finally {
             executor.shutdown();
         }

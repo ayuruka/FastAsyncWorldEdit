@@ -101,7 +101,30 @@ public class Forge1710Player extends AbstractPlayerActor {
 
     @Override
     public BlockBag getInventoryBlockBag() {
-        return null;
+        return new Forge1710PlayerBlockBag(player);
+    }
+
+    @Override
+    public com.sk89q.worldedit.world.gamemode.GameMode getGameMode() {
+        return switch (player.theItemInWorldManager.getGameType()) {
+            case CREATIVE -> com.sk89q.worldedit.world.gamemode.GameModes.CREATIVE;
+            case ADVENTURE -> com.sk89q.worldedit.world.gamemode.GameModes.ADVENTURE;
+            default -> com.sk89q.worldedit.world.gamemode.GameModes.SURVIVAL;
+        };
+    }
+
+    @Override
+    public void setGameMode(com.sk89q.worldedit.world.gamemode.GameMode gameMode) {
+        net.minecraft.world.WorldSettings.GameType type;
+        if (gameMode == com.sk89q.worldedit.world.gamemode.GameModes.CREATIVE) {
+            type = net.minecraft.world.WorldSettings.GameType.CREATIVE;
+        } else if (gameMode == com.sk89q.worldedit.world.gamemode.GameModes.ADVENTURE) {
+            type = net.minecraft.world.WorldSettings.GameType.ADVENTURE;
+        } else {
+            // 1.7.10 has no spectator mode.
+            type = net.minecraft.world.WorldSettings.GameType.SURVIVAL;
+        }
+        runSync(() -> player.setGameType(type));
     }
 
     @Override
@@ -222,6 +245,11 @@ public class Forge1710Player extends AbstractPlayerActor {
         MinecraftServer server = MinecraftServer.getServer();
         if (server == null) {
             return false;
+        }
+        // On Bukkit hybrids (Crucible) permission plugins decide; Bukkit gives operators unregistered permissions.
+        Boolean bukkit = BukkitPermissions.check(player.getUniqueID(), permission);
+        if (bukkit != null) {
+            return bukkit;
         }
         // Operators (and single-player owners with cheats) get every WorldEdit permission.
         return player.canCommandSenderUseCommand(2, "worldedit");

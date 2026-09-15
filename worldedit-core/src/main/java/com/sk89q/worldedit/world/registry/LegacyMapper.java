@@ -316,7 +316,15 @@ public final class LegacyMapper {
 
     public void register(int id, int data, BlockStateHolder state) {
         Integer combinedId = ((id << 4) + data);
-        extraId4DataToStateId.put(combinedId, (Integer) state.getInternalId());
+        if (combinedId < blockArr.length) {
+            // Ids the legacy table could not resolve on this platform (e.g. states it cannot represent) are filled in;
+            // lookups in this range never consult the extra map.
+            if (blockArr[combinedId] == 0) {
+                blockArr[combinedId] = state.getInternalId();
+            }
+        } else {
+            extraId4DataToStateId.put(combinedId, (Integer) state.getInternalId());
+        }
         blockStateToLegacyId4Data.putIfAbsent(state.getInternalId(), combinedId);
     }
 

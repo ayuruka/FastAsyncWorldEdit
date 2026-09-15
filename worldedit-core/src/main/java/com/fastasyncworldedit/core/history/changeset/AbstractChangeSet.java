@@ -107,6 +107,17 @@ public abstract class AbstractChangeSet implements ChangeSet, IBatchProcessor {
 
     public abstract void add(int x, int y, int z, int combinedFrom, int combinedTo);
 
+    /**
+     * Called by {@link #processSet} for each block change of a chunk before it is recorded. Returning false drops the
+     * change from the chunk, so it is neither applied nor recorded (e.g. the player's inventory lacks the block).
+     *
+     * @param ordinalFrom the current block's ordinal
+     * @param ordinalTo   the new block's ordinal
+     */
+    protected boolean allowBlockChange(int ordinalFrom, int ordinalTo) {
+        return true;
+    }
+
     @Override
     public Iterator<Change> backwardIterator() {
         return getIterator(false);
@@ -191,6 +202,10 @@ public abstract class AbstractChangeSet implements ChangeSet, IBatchProcessor {
                                 from = BlockTypesCache.ReservedIDs.AIR;
                             }
                             final int combinedFrom = from;
+                            if (!allowBlockChange(combinedFrom, combinedTo)) {
+                                blocksSet[index] = BlockTypesCache.ReservedIDs.__RESERVED__;
+                                continue;
+                            }
                             add(xx, yy, zz, combinedFrom, combinedTo);
                         }
                     }

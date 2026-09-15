@@ -518,13 +518,14 @@ public final class EditSessionBuilder {
                 extent = world;
             }
             if (combineStages == null) {
+                // Edits using the inventory are also combined: BlockBagChangeSet charges each chunk before it is applied
+                // and drops blocks the inventory lacks. (The per-block HistoryExtent path is skipped by bulk operations
+                // such as setBlocks, so those edits were neither charged nor recorded.)
                 combineStages =
                         // If it's enabled in the settings
                         Settings.settings().HISTORY.COMBINE_STAGES
                                 // If fast placement is disabled, it's slower to perform a copy on each chunk
-                                && this.limit.FAST_PLACEMENT
-                                // If the edit uses items from the inventory we can't use a delayed task
-                                && this.blockBag == null;
+                                && this.limit.FAST_PLACEMENT;
             }
             extent = this.bypassAll = wrapExtent(extent, eventBus, event, EditSession.Stage.BEFORE_CHANGE);
             this.bypassHistory = this.extent = wrapExtent(bypassAll, eventBus, event, EditSession.Stage.BEFORE_REORDER);
@@ -558,7 +559,9 @@ public final class EditSessionBuilder {
                         changeSet = new BlockBagChangeSet(changeSet, blockBag, limit.INVENTORY_MODE == 1);
                     }
                     if (combineStages) {
-                        this.extent = extent.enableHistory(changeSet);
+                        // A block bag changes the chunk, so it cannot run after sending (SEND_BEFORE_HISTORY).
+                        this.extent = changeSet instanceof BlockBagChangeSet ? extent.addProcessor(changeSet) :
+                                extent.enableHistory(changeSet);
                     } else {
                         this.extent = new HistoryExtent(extent, changeSet);
 //                        if (this.blockBag != null) {

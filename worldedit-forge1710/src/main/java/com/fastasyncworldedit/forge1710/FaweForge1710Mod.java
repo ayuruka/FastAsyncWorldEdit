@@ -111,8 +111,9 @@ public class FaweForge1710Mod {
     }
 
     /**
-     * Old MCEdit schematics store numeric block ids. WorldEdit's legacy table only knows vanilla ids, so modded blocks
-     * (ids above 255, AddBlocks) would load as air; this world's Forge id mapping is registered for them.
+     * Old MCEdit schematics and snapshot region files store numeric block ids. WorldEdit's legacy table only knows vanilla
+     * ids and misses some vanilla id:meta pairs (chest meta 4 loaded as air), so this world's Forge id mapping is
+     * registered for every block; the legacy table keeps the entries it resolved itself.
      */
     private void registerModdedLegacyIds() {
         com.sk89q.worldedit.world.registry.LegacyMapper legacy = com.sk89q.worldedit.world.registry.LegacyMapper.getInstance();
@@ -121,15 +122,15 @@ public class FaweForge1710Mod {
         for (Object o : cpw.mods.fml.common.registry.GameData.getBlockRegistry()) {
             net.minecraft.block.Block block = (net.minecraft.block.Block) o;
             int id = net.minecraft.block.Block.getIdFromBlock(block);
-            if (id < 256) {
-                continue;
-            }
             for (int meta = 0; meta < 16; meta++) {
-                legacy.register(id, meta, mapper.toState(block, meta));
+                com.sk89q.worldedit.world.block.BlockState state = mapper.toState(block, meta);
+                if (!state.getBlockType().getMaterial().isAir() || id == 0) {
+                    legacy.register(id, meta, state);
+                }
             }
             registered++;
         }
-        logger.info("Registered numeric ids of {} modded blocks for legacy schematics", registered);
+        logger.info("Registered numeric ids of {} blocks for legacy schematics and snapshots", registered);
     }
 
     @Mod.EventHandler

@@ -29,6 +29,7 @@ import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.util.Location;
 import com.sk89q.worldedit.world.DataException;
+import com.sk89q.worldedit.world.biome.BiomeType;
 import com.sk89q.worldedit.world.chunk.Chunk;
 import com.sk89q.worldedit.world.storage.ChunkStore;
 import com.sk89q.worldedit.world.storage.MissingChunkException;
@@ -193,7 +194,10 @@ public class SnapshotRestore {
                         editSession.setBlock(pos, chunk.getBlock(pos));
                         //FAWE start - biome and entity restore
                         if (restoreBiomes && (pos.x() & 3) == 0 && (pos.y() & 3) == 0 && (pos.z() & 3) == 0) {
-                            editSession.setBiome(pos, chunk.getBiome(pos));
+                            BiomeType biome = chunk.getBiome(pos);
+                            if (biome != null) {
+                                editSession.setBiome(pos, biome);
+                            }
                         }
                         //FAWE end
                     } catch (DataException e) {

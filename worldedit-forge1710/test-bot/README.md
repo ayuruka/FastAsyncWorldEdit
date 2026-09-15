@@ -9,9 +9,12 @@ Mineflayer does not support 1.7.10, so the bot uses `minecraft-protocol` directl
 ```
 npm install
 ./build-deploy.sh                          # build, check for client-only API use, copy the jar to the server
-node run-tests.js --start-server           # basic, data, transform and features suites
+node run-tests.js --start-server           # basic, data, transform, features, snapshot and blockbag suites
 node run-tests.js --start-server --suite smoke
 node run-tests.js --start-server --locale ja_JP --commands "//help set"
 ```
 
 Reports are written to `reports/` (`last-report.txt`, `server-errors.txt`).
+
+`--start-server` also points `snapshots-dir` in the server's `config/worldedit/worldedit.properties` at
+`<server>/fawe-snapshots`; the snapshot suite saves the world and copies its region files there before `//restore`.
