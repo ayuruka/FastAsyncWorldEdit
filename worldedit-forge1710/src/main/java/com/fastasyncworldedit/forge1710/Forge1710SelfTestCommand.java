@@ -63,6 +63,16 @@ public class Forge1710SelfTestCommand extends CommandBase {
                     player.posY, player.posZ, Forge1710Adapter.adapt(player).getLocation().toVector()));
             return;
         }
+        if (args.length == 4 && args[0].equals("light")) {
+            int x = Integer.parseInt(args[1]);
+            int y = Integer.parseInt(args[2]);
+            int z = Integer.parseInt(args[3]);
+            net.minecraft.world.World world = sender.getEntityWorld();
+            reply(sender, "[SELFTEST] light " + x + " " + y + " " + z + ": block="
+                    + world.getSavedLightValue(net.minecraft.world.EnumSkyBlock.Block, x, y, z) + " sky="
+                    + world.getSavedLightValue(net.minecraft.world.EnumSkyBlock.Sky, x, y, z));
+            return;
+        }
         if (args.length == 3 && args[0].equals("biome")) {
             int x = Integer.parseInt(args[1]);
             int z = Integer.parseInt(args[2]);

@@ -32,6 +32,7 @@ import net.minecraft.world.EnumSkyBlock;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
+import net.minecraft.init.Blocks;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -58,6 +59,8 @@ public class Forge1710GetBlocks extends CharGetBlocks {
 
     private static final Logger LOGGER = LogManager.getLogger("FAWE-Forge1710");
     private static final int SECTIONS = 16;
+    /** Up to this many opacity changes per chunk are relit block by block; larger edits use chunk light population. */
+    private static final int MAX_EXACT_RELIGHT = 1024;
 
     private final Forge1710World world;
     private final int chunkX;
@@ -186,7 +189,18 @@ public class Forge1710GetBlocks extends CharGetBlocks {
         }
         SideEffectSet sideEffects = set.getSideEffectSet();
         boolean neighbors = sideEffects != null && sideEffects.shouldApply(SideEffect.NEIGHBORS);
+        boolean updates = sideEffects != null && sideEffects.shouldApply(SideEffect.UPDATE);
         int flags = 2 | (neighbors ? 1 : 0);
+        // FAWE's defaults (no neighbour or block updates) allow writing straight into the chunk sections; World.setBlock is
+        // only used when those side effects are requested. ExtendedBlockStorage's accessors are EndlessIDs-aware.
+        boolean fast = !neighbors && !updates;
+        ExtendedBlockStorage[] storages = chunk.getBlockStorageArray();
+        int changedSections = 0;
+        // Positions whose light emission changed (always relit) and whose opacity changed (relit for small edits).
+        int[] lightChanges = new int[64];
+        int lightChangeCount = 0;
+        int[] opacityChanges = new int[64];
+        int opacityChangeCount = 0;
         NativeBlockMapper mapper = NativeBlockMapper.get();
         int bx = chunkX << 4;
         int bz = chunkZ << 4;
@@ -241,6 +255,38 @@ public class Forge1710GetBlocks extends CharGetBlocks {
                 int z = bz + ((index >> 4) & 15);
                 Block block = Block.getBlockById(nativeId >> 4);
                 int meta = nativeId & 15;
+                if (fast) {
+                    ExtendedBlockStorage storage = storages[layer];
+                    if (storage == null) {
+                        if (block == Blocks.air) {
+                            continue;
+                        }
+                        storage = storages[layer] = new ExtendedBlockStorage(layer << 4, !nmsWorld.provider.hasNoSky);
+                    }
+                    int lx = index & 15;
+                    int ly = (index >> 8) & 15;
+                    int lz = (index >> 4) & 15;
+                    Block previous = storage.getBlockByExtId(lx, ly, lz);
+                    if (previous == block && storage.getExtBlockMetadata(lx, ly, lz) == meta) {
+                        continue;
+                    }
+                    int packed = (y << 8) | (lz << 4) | lx;
+                    if (previous.getLightValue() != block.getLightValue()) {
+                        if (lightChangeCount == lightChanges.length) {
+                            lightChanges = Arrays.copyOf(lightChanges, lightChangeCount * 2);
+                        }
+                        lightChanges[lightChangeCount++] = packed;
+                    } else if (previous.getLightOpacity() != block.getLightOpacity() && opacityChangeCount <= MAX_EXACT_RELIGHT) {
+                        if (opacityChangeCount == opacityChanges.length) {
+                            opacityChanges = Arrays.copyOf(opacityChanges, opacityChangeCount * 2);
+                        }
+                        opacityChanges[opacityChangeCount++] = packed;
+                    }
+                    storage.func_150818_a(lx, ly, lz, block);
+                    storage.setExtBlockMetadata(lx, ly, lz, meta);
+                    changedSections |= 1 << layer;
+                    continue;
+                }
                 if (chunk.getBlock(x & 15, y, z & 15) == block && chunk.getBlockMetadata(x & 15, y, z & 15) == meta) {
                     continue;
                 }
@@ -253,6 +299,26 @@ public class Forge1710GetBlocks extends CharGetBlocks {
             }
             synchronized (sectionLocks[layer]) {
                 blocks[layer] = null;
+            }
+        }
+
+        if (changedSections != 0) {
+            // Height maps and sky light now; the rest of the lighting (light below overhangs, block light sources) is
+            // recomputed by vanilla's light population on the following chunk ticks.
+
+            chunk.generateSkylightMap();
+            for (int i = 0; i < lightChangeCount; i++) {
+                int packed = lightChanges[i];
+                nmsWorld.func_147451_t(bx + (packed & 15), packed >> 8, bz + ((packed >> 4) & 15));
+            }
+            if (opacityChangeCount <= MAX_EXACT_RELIGHT) {
+                for (int i = 0; i < opacityChangeCount; i++) {
+                    int packed = opacityChanges[i];
+                    nmsWorld.func_147451_t(bx + (packed & 15), packed >> 8, bz + ((packed >> 4) & 15));
+                }
+            } else {
+                // Large edits: let vanilla's light population recompute the chunk over the following ticks.
+                chunk.isLightPopulated = false;
             }
         }
 
@@ -304,7 +370,9 @@ public class Forge1710GetBlocks extends CharGetBlocks {
         }
         chunk.setChunkModified();
         if (biomesChanged) {
-            Forge1710World.resendChunk(nmsWorld, chunkX, chunkZ);
+            Forge1710World.resendChunk(nmsWorld, chunkX, chunkZ, 0xFFFF);
+        } else if (changedSections != 0) {
+            Forge1710World.resendChunk(nmsWorld, chunkX, chunkZ, changedSections);
         }
     }
 

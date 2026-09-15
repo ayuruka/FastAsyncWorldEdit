@@ -384,6 +384,13 @@ public class Forge1710World extends AbstractWorld {
      * Must be called on the server thread.
      */
     public static void resendChunk(WorldServer world, int chunkX, int chunkZ) {
+        resendChunk(world, chunkX, chunkZ, 0xFFFF);
+    }
+
+    /**
+     * Must be called on the server thread. {@code sectionMask} selects the sections (bit per 16 blocks of height).
+     */
+    public static void resendChunk(WorldServer world, int chunkX, int chunkZ, int sectionMask) {
         if (!world.theChunkProviderServer.chunkExists(chunkX, chunkZ)) {
             return;
         }
@@ -394,7 +401,7 @@ public class Forge1710World extends AbstractWorld {
             if (world.getPlayerManager().isPlayerWatchingChunk(player, chunkX, chunkZ)) {
                 if (packet == null) {
                     // Non-full update of every allocated section; a full update would also resend biomes.
-                    packet = new S21PacketChunkData(chunk, false, 0xFFFF);
+                    packet = new S21PacketChunkData(chunk, false, sectionMask);
                 }
                 player.playerNetServerHandler.sendPacket(packet);
             }

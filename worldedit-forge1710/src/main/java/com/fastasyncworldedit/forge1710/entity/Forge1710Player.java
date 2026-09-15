@@ -154,7 +154,8 @@ public class Forge1710Player extends AbstractPlayerActor {
 
     @Override
     public void print(Component component) {
-        Component rendered = WorldEditText.format(component, getLocale());
+        Component rendered = com.fastasyncworldedit.forge1710.CommandHelpTranslator.translate(
+                WorldEditText.format(component, getLocale()), getLocale());
         if (LOG_CHAT) {
             LOGGER.info("[-> {}] {}", getName(), PlainComponentSerializer.INSTANCE.serialize(rendered));
         }

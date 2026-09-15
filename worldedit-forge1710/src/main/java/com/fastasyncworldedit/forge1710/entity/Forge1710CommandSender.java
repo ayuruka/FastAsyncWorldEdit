@@ -55,7 +55,8 @@ public class Forge1710CommandSender extends AbstractNonPlayerActor {
 
     @Override
     public void print(Component component) {
-        send(LegacyComponentSerializer.legacy().serialize(WorldEditText.format(component, getLocale())));
+        send(LegacyComponentSerializer.legacy().serialize(com.fastasyncworldedit.forge1710.CommandHelpTranslator.translate(
+                WorldEditText.format(component, getLocale()), getLocale())));
     }
 
     private void send(String msg) {
