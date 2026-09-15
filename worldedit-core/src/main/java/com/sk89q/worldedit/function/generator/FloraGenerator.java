@@ -91,9 +91,9 @@ public class FloraGenerator implements RegionFunction {
      */
     public static Pattern getDesertPattern() {
         RandomPattern pattern = new RandomPattern();
-        pattern.add(BlockTypes.DEAD_BUSH.getDefaultState(), 30);
-        pattern.add(BlockTypes.CACTUS.getDefaultState(), 20);
-        pattern.add(BlockTypes.AIR.getDefaultState(), 300);
+        addIfPresent(pattern, BlockTypes.DEAD_BUSH, 30);
+        addIfPresent(pattern, BlockTypes.CACTUS, 20);
+        addIfPresent(pattern, BlockTypes.AIR, 300);
         return pattern;
     }
 
@@ -105,9 +105,9 @@ public class FloraGenerator implements RegionFunction {
     public static Pattern getTemperatePattern() {
         RandomPattern pattern = new RandomPattern();
         BlockType grass = BlockTypes.SHORT_GRASS;
-        pattern.add(grass.getDefaultState(), 300);
-        pattern.add(BlockTypes.POPPY.getDefaultState(), 5);
-        pattern.add(BlockTypes.DANDELION.getDefaultState(), 5);
+        addIfPresent(pattern, grass, 300);
+        addIfPresent(pattern, BlockTypes.POPPY, 5);
+        addIfPresent(pattern, BlockTypes.DANDELION, 5);
         return pattern;
     }
 
@@ -119,8 +119,8 @@ public class FloraGenerator implements RegionFunction {
      */
     public static Pattern mushroomPattern() {
         RandomPattern pattern = new RandomPattern();
-        pattern.add(BlockTypes.RED_MUSHROOM.getDefaultState(), 10);
-        pattern.add(BlockTypes.BROWN_MUSHROOM.getDefaultState(), 10);
+        addIfPresent(pattern, BlockTypes.RED_MUSHROOM, 10);
+        addIfPresent(pattern, BlockTypes.BROWN_MUSHROOM, 10);
         return pattern;
     }
 
@@ -131,9 +131,9 @@ public class FloraGenerator implements RegionFunction {
      */
     public static Pattern netherPattern() {
         RandomPattern pattern = new RandomPattern();
-        pattern.add(BlockTypes.CRIMSON_ROOTS.getDefaultState(), 10);
-        pattern.add(BlockTypes.CRIMSON_FUNGUS.getDefaultState(), 20);
-        pattern.add(BlockTypes.WARPED_FUNGUS.getDefaultState(), 5);
+        addIfPresent(pattern, BlockTypes.CRIMSON_ROOTS, 10);
+        addIfPresent(pattern, BlockTypes.CRIMSON_FUNGUS, 20);
+        addIfPresent(pattern, BlockTypes.WARPED_FUNGUS, 5);
         return pattern;
     }
 
@@ -144,10 +144,10 @@ public class FloraGenerator implements RegionFunction {
      */
     public static Pattern warpedNyliumPattern() {
         RandomPattern pattern = new RandomPattern();
-        pattern.add(BlockTypes.WARPED_ROOTS.getDefaultState(), 15);
-        pattern.add(BlockTypes.NETHER_SPROUTS.getDefaultState(), 20);
-        pattern.add(BlockTypes.WARPED_FUNGUS.getDefaultState(), 7);
-        pattern.add(BlockTypes.CRIMSON_ROOTS.getDefaultState(), 10);
+        addIfPresent(pattern, BlockTypes.WARPED_ROOTS, 15);
+        addIfPresent(pattern, BlockTypes.NETHER_SPROUTS, 20);
+        addIfPresent(pattern, BlockTypes.WARPED_FUNGUS, 7);
+        addIfPresent(pattern, BlockTypes.CRIMSON_ROOTS, 10);
         return pattern;
     }
     //FAWE end
@@ -183,5 +183,13 @@ public class FloraGenerator implements RegionFunction {
 
         return false;
     }
+
+    //FAWE start - platforms without newer blocks (e.g. Minecraft 1.7.10) have null BlockTypes constants
+    private static void addIfPresent(RandomPattern pattern, @javax.annotation.Nullable com.sk89q.worldedit.world.block.BlockType type, double weight) {
+        if (type != null) {
+            pattern.add(type.getDefaultState(), weight);
+        }
+    }
+    //FAWE end
 
 }

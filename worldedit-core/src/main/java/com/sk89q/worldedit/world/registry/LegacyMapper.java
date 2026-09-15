@@ -68,6 +68,10 @@ public final class LegacyMapper {
     private final Map<String, String> blockEntries = new HashMap<>();
     //FAWE end
     private final Map<String, BlockState> stringToBlockMap = new HashMap<>();
+    //FAWE start
+    private int unknownBlocks;
+    private int unknownItems;
+    //FAWE end
     private final Multimap<BlockState, String> blockToStringMap = HashMultimap.create();
 
     /**
@@ -149,10 +153,14 @@ public final class LegacyMapper {
 
                 // if it's still null, both fixer and default failed
                 if (state == null) {
-                    LOGGER.error(
-                            "Unknown block: {}. Neither the DataFixer nor defaulting worked to recognize this block.",
-                            value
-                    );
+                    //FAWE start - older platforms lack many newer blocks; log a few and a summary instead of every one
+                    if (unknownBlocks++ < 5) {
+                        LOGGER.error(
+                                "Unknown block: {}. Neither the DataFixer nor defaulting worked to recognize this block.",
+                                value
+                        );
+                    }
+                    //FAWE end
                 } else {
                     // it's not null so one of them succeeded, now use it
                     blockToStringMap.put(state, id);
@@ -188,7 +196,11 @@ public final class LegacyMapper {
                 type = ItemTypes.get(value);
             }
             if (type == null) {
-                LOGGER.error("Unknown item: {}. Neither the DataFixer nor defaulting worked to recognize this item.", value);
+                //FAWE start
+                if (unknownItems++ < 5) {
+                    LOGGER.error("Unknown item: {}. Neither the DataFixer nor defaulting worked to recognize this item.", value);
+                }
+                //FAWE end
             } else {
                 try {
                     itemMap.put(getCombinedId(id), type);
@@ -196,6 +208,11 @@ public final class LegacyMapper {
                 }
             }
         }
+        //FAWE start
+        if (unknownBlocks > 5 || unknownItems > 5) {
+            LOGGER.warn("Legacy id table: {} blocks and {} items are unknown to this platform", unknownBlocks, unknownItems);
+        }
+        //FAWE end
     }
 
     //FAWE start

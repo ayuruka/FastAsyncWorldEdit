@@ -72,6 +72,25 @@ public class Forge1710Player extends AbstractPlayerActor {
         return Forge1710Adapter.adapt(player.getCurrentEquippedItem());
     }
 
+    /**
+     * The held block with its metadata (orange wool, not white wool), which the item id alone cannot express.
+     */
+    @Override
+    public com.sk89q.worldedit.world.block.BaseBlock getBlockInHand(HandSide handSide) throws com.sk89q.worldedit.WorldEditException {
+        net.minecraft.item.ItemStack stack = handSide == HandSide.MAIN_HAND ? player.getCurrentEquippedItem() : null;
+        if (stack != null && stack.getItem() instanceof net.minecraft.item.ItemBlock itemBlock) {
+            net.minecraft.block.Block block = itemBlock.field_150939_a;
+            int meta = stack.getItem().getMetadata(stack.getItemDamage()) & 15;
+            return com.fastasyncworldedit.forge1710.registry.NativeBlockMapper.get().toState(block, meta).toBaseBlock();
+        }
+        return super.getBlockInHand(handSide);
+    }
+
+    @Override
+    public void dispatchCUIEvent(com.sk89q.worldedit.internal.cui.CUIEvent event) {
+        runSync(() -> com.fastasyncworldedit.forge1710.Forge1710CUI.send(player, event));
+    }
+
     @Override
     public void giveItem(BaseItemStack itemStack) {
         net.minecraft.item.ItemStack stack = Forge1710Adapter.toNative(itemStack);
@@ -88,6 +107,12 @@ public class Forge1710Player extends AbstractPlayerActor {
     @Override
     public Location getLocation() {
         return new Location(getWorld(), player.posX, player.posY, player.posZ, player.rotationYaw, player.rotationPitch);
+    }
+
+    @Override
+    public boolean trySetPosition(com.sk89q.worldedit.math.Vector3 pos, float pitch, float yaw) {
+        runSync(() -> player.playerNetServerHandler.setPlayerLocation(pos.x(), pos.y(), pos.z(), yaw, pitch));
+        return true;
     }
 
     @Override

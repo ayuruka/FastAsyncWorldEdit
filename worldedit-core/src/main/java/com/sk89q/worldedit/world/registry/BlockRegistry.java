@@ -104,5 +104,19 @@ public interface BlockRegistry {
      * @return a map of states where the key is the property's ID
      */
     Map<String, ? extends List<Property<?>>> getAllProperties();
+
+    //FAWE start
+    /**
+     * Additional block type ids that resolve to registered block types, as {@code alias -> registered id}. Platforms
+     * whose ids differ from the current Minecraft ids (e.g. 1.7.10's {@code minecraft:grass} for
+     * {@code minecraft:grass_block}) use this so {@link com.sk89q.worldedit.world.block.BlockTypes} constants and
+     * user input with current ids still resolve.
+     *
+     * @return aliases to register after all block types
+     */
+    default Map<String, String> getBlockTypeAliases() {
+        return java.util.Collections.emptyMap();
+    }
+    //FAWE end
     //FAWE end
 }

@@ -59,6 +59,7 @@ public class FaweForge1710Mod {
         FMLCommonHandler.instance().bus().register(taskManager);
         FMLCommonHandler.instance().bus().register(this);
         MinecraftForge.EVENT_BUS.register(this);
+        Forge1710CUI.register();
         logger.info("FastAsyncWorldEdit for Forge 1.7.10 ({}) loaded on Java {}", VERSION, Runtime.version().feature());
     }
 
@@ -91,6 +92,7 @@ public class FaweForge1710Mod {
         Forge1710Biomes.registerAll();
         Forge1710EntityTypes.registerAll();
         com.fastasyncworldedit.forge1710.registry.LegacyOrientation.install();
+        com.fastasyncworldedit.forge1710.world.Forge1710World.registerTreeTypes();
         WorldEdit.getInstance().getEventBus().post(new PlatformReadyEvent(platform));
         // BlockState only switches to reading tile entity NBT once its material has been looked up (CompoundInput), so
         // resolve every state's material up front; otherwise copies, clipboards and history drop chest/sign contents.

@@ -96,6 +96,19 @@ public final class NamespacedRegistry<V extends Keyed> extends Registry<V> {
     }
 
     //FAWE start
+    /**
+     * Registers an additional key for a value that is already registered, without giving it a new internal id. Lets
+     * platforms with different block ids (e.g. Minecraft 1.7.10) answer lookups by current ids.
+     */
+    public synchronized V registerAlias(final String key, final V value) {
+        requireNonNull(key, "key");
+        final int i = key.indexOf(':');
+        checkState(i > 0, "key is not namespaced");
+        final V registered = super.register(key, value);
+        knownNamespaces.add(key.substring(0, i));
+        return registered;
+    }
+
     public V getByInternalId(int index) {
         try {
             return values.get(index);

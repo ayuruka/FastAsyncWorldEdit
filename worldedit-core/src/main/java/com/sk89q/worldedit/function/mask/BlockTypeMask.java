@@ -99,6 +99,10 @@ public class BlockTypeMask extends AbstractExtentMask {
     public void add(@Nonnull BlockType... block) {
         //FAWE start - get internal id
         for (BlockType type : block) {
+            // BlockTypes constants are null for blocks the platform does not have (e.g. seagrass on 1.7.10).
+            if (type == null) {
+                continue;
+            }
             if (!hasAir && (type == BlockTypes.AIR || type == BlockTypes.CAVE_AIR || type == BlockTypes.VOID_AIR)) {
                 hasAir = true;
             }

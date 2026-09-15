@@ -70,6 +70,14 @@ public class Forge1710BlockRegistry implements BlockRegistry {
         return nativeId < 0 ? OptionalInt.empty() : OptionalInt.of(nativeId);
     }
 
+    /**
+     * 1.7.10 vanilla names (wool, planks, stone_stairs...) resolve to the current ids vanilla blocks are exposed with.
+     */
+    @Override
+    public Map<String, String> getBlockTypeAliases() {
+        return NativeBlockMapper.get().legacyNameAliases();
+    }
+
     @Override
     public Collection<String> values() {
         return NativeBlockMapper.get().values();
@@ -77,8 +85,15 @@ public class Forge1710BlockRegistry implements BlockRegistry {
 
     @Override
     public Map<String, ? extends List<Property<?>>> getAllProperties() {
-        return Collections.singletonMap(NativeBlockMapper.META_PROPERTY_NAME,
-                Collections.<Property<?>>singletonList(NativeBlockMapper.metaProperty()));
+        Map<String, List<Property<?>>> all = new java.util.TreeMap<>();
+        for (String value : NativeBlockMapper.get().values()) {
+            int bracket = value.indexOf('[');
+            String id = bracket < 0 ? value : value.substring(0, bracket);
+            for (Map.Entry<String, ? extends Property<?>> entry : NativeBlockMapper.get().getProperties(id).entrySet()) {
+                all.computeIfAbsent(entry.getKey(), k -> new java.util.ArrayList<>()).add(entry.getValue());
+            }
+        }
+        return all;
     }
 
 }

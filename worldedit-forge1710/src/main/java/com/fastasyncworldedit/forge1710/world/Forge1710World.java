@@ -61,6 +61,10 @@ public class Forge1710World extends AbstractWorld {
         this.name = worldName(world);
     }
 
+    public static void registerTreeTypes() {
+        Forge1710Trees.registerTypes();
+    }
+
     public static String worldName(WorldServer world) {
         String base = world.getWorldInfo().getWorldName();
         int dimension = world.provider.dimensionId;
@@ -311,8 +315,58 @@ public class Forge1710World extends AbstractWorld {
     }
 
     @Override
-    public boolean generateTree(TreeType type, EditSession editSession, BlockVector3 position) {
-        return false;
+    public boolean generateTree(TreeType type, EditSession editSession, BlockVector3 position)
+            throws com.sk89q.worldedit.MaxChangedBlocksException {
+        return Forge1710Trees.generate(this, type.id(), editSession, position);
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public boolean generateTree(com.sk89q.worldedit.util.TreeGenerator.TreeType type, EditSession editSession,
+            BlockVector3 position) throws com.sk89q.worldedit.MaxChangedBlocksException {
+        return Forge1710Trees.generate(this, Forge1710Trees.idFor(type), editSession, position);
+    }
+
+    /**
+     * Terrain-only regeneration: the world's chunk generator builds a fresh chunk that is never registered with the
+     * world, and its blocks (and biomes, if requested) are copied into the extent, so the result is recorded in history.
+     * Population (trees, ores, structures) is not repeated, because 1.7.10 populators write into the live world.
+     */
+    @Override
+    public boolean regenerate(Region region, com.sk89q.worldedit.extent.Extent extent,
+            com.sk89q.worldedit.world.RegenOptions options) {
+        WorldServer world = getWorld();
+        NativeBlockMapper mapper = NativeBlockMapper.get();
+        try {
+            for (com.sk89q.worldedit.math.BlockVector2 chunkPos : region.getChunks()) {
+                Chunk fresh = onMainThread(() -> world.theChunkProviderServer.currentChunkProvider
+                        .provideChunk(chunkPos.x(), chunkPos.z()));
+                int bx = chunkPos.x() << 4;
+                int bz = chunkPos.z() << 4;
+                int[] biomes = options.shouldRegenBiomes() ? Forge1710Biomes.read(fresh) : null;
+                for (int lx = 0; lx < 16; lx++) {
+                    for (int lz = 0; lz < 16; lz++) {
+                        for (int y = Math.max(0, region.getMinimumY()); y <= Math.min(255, region.getMaximumY()); y++) {
+                            BlockVector3 pos = BlockVector3.at(bx + lx, y, bz + lz);
+                            if (!region.contains(pos)) {
+                                continue;
+                            }
+                            extent.setBlock(pos, mapper.toState(fresh.getBlock(lx, y, lz), fresh.getBlockMetadata(lx, y, lz)));
+                            if (biomes != null) {
+                                BiomeType biome = options.hasBiomeType() ? options.getBiomeType()
+                                        : Forge1710Biomes.toFawe(biomes[lz << 4 | lx]);
+                                if (biome != null) {
+                                    extent.setBiome(pos, biome);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return true;
+        } catch (WorldEditException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

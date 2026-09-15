@@ -229,6 +229,9 @@ public final class TreeGenerator {
         public boolean canGenerateOn(BlockType type) {
             return type == BlockTypes.DIRT
                     || type == BlockTypes.GRASS_BLOCK
+                    // Minecraft 1.7-1.12 names (legacy platforms)
+                    || type.id().equals("minecraft:grass")
+                    || type.id().equals("minecraft:mycelium")
                     || type == BlockTypes.PODZOL
                     || type == BlockTypes.COARSE_DIRT
                     || type == BlockTypes.MOSS_BLOCK

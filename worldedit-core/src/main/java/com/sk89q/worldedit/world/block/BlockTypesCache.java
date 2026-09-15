@@ -273,6 +273,15 @@ public class BlockTypesCache {
             states = stateList.toArray(new BlockState[stateList.size()]);
             ticking = Booleans.toArray(tickList);
 
+            //FAWE start - platform aliases, before BlockTypes resolves its constants
+            for (Map.Entry<String, String> alias : blockReg.getBlockTypeAliases().entrySet()) {
+                BlockType target = BlockType.REGISTRY.get(alias.getValue());
+                if (target != null && BlockType.REGISTRY.get(alias.getKey()) == null) {
+                    BlockType.REGISTRY.registerAlias(alias.getKey(), target);
+                }
+            }
+            //FAWE end
+
         } catch (Throwable e) {
             e.printStackTrace();
             throw new RuntimeException(e);

@@ -427,6 +427,10 @@ public class BlockMaskBuilder {
     }
 
     public BlockMaskBuilder add(BlockType type) {
+        // BlockTypes constants are null for blocks the platform does not have (e.g. kelp on Minecraft 1.7.10).
+        if (type == null) {
+            return this;
+        }
         bitSets[type.getInternalId()] = ALL;
         return this;
     }
