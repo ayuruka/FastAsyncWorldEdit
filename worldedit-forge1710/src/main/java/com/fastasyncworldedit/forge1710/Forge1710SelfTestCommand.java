@@ -63,6 +63,11 @@ public class Forge1710SelfTestCommand extends CommandBase {
                     player.posY, player.posZ, Forge1710Adapter.adapt(player).getLocation().toVector()));
             return;
         }
+        if (args.length == 2 && args[0].equals("id")) {
+            net.minecraft.block.Block block = (net.minecraft.block.Block) net.minecraft.block.Block.blockRegistry.getObject(args[1]);
+            reply(sender, "[SELFTEST] id " + args[1] + ": " + (block == null ? "none" : net.minecraft.block.Block.getIdFromBlock(block)));
+            return;
+        }
         if (args.length == 4 && args[0].equals("light")) {
             int x = Integer.parseInt(args[1]);
             int y = Integer.parseInt(args[2]);

@@ -458,6 +458,34 @@ async function runTransformTests (session) {
   await clear()
 }
 
+/**
+ * Writes a gzipped MCEdit schematic one block high and one deep: blocks[i] are numeric ids (up to 4095, the high bits
+ * go to AddBlocks), data[i] their metadata.
+ */
+function writeLegacySchematic (file, blocks, data) {
+  const zlib = require('zlib')
+  const parts = []
+  const str = (s) => { const b = Buffer.from(s, 'utf8'); const h = Buffer.alloc(2); h.writeUInt16BE(b.length); return Buffer.concat([h, b]) }
+  const named = (type, name, payload) => Buffer.concat([Buffer.from([type]), str(name), payload])
+  const i16 = (v) => { const b = Buffer.alloc(2); b.writeInt16BE(v); return b }
+  const i32 = (v) => { const b = Buffer.alloc(4); b.writeInt32BE(v); return b }
+  const bytes = (values) => Buffer.concat([i32(values.length), Buffer.from(values.map(v => v & 0xFF))])
+  const add = new Array(Math.ceil(blocks.length / 2)).fill(0)
+  blocks.forEach((id, i) => {
+    const high = (id >> 8) & 0xF
+    // Even indices use the low nibble, odd indices the high nibble (MCEdit / WorldEdit convention).
+    add[i >> 1] |= (i & 1) === 0 ? high : high << 4
+  })
+  parts.push(named(2, 'Width', i16(blocks.length)), named(2, 'Height', i16(1)), named(2, 'Length', i16(1)))
+  parts.push(named(8, 'Materials', str('Alpha')), named(7, 'Blocks', bytes(blocks)), named(7, 'Data', bytes(data)))
+  parts.push(named(7, 'AddBlocks', bytes(add)))
+  parts.push(named(9, 'Entities', Buffer.concat([Buffer.from([10]), i32(0)])))
+  parts.push(named(9, 'TileEntities', Buffer.concat([Buffer.from([10]), i32(0)])))
+  for (const key of ['WEOriginX', 'WEOriginY', 'WEOriginZ', 'WEOffsetX', 'WEOffsetY', 'WEOffsetZ']) parts.push(named(3, key, i32(0)))
+  const root = named(10, 'Schematic', Buffer.concat([...parts, Buffer.from([0])]))
+  fs.writeFileSync(file, zlib.gzipSync(root))
+}
+
 /** Block state syntax, old names, trees, snow and regeneration, checked in the native world. */
 async function runFeatureTests (session) {
   const pos = session.position
@@ -569,6 +597,24 @@ async function runFeatureTests (session) {
   await sleep(4000)
   l = await light(nextToLamp)
   record('fast path: removing the glowstone darkens the cave', l.block === 0, `${joined(r)} / ${l.line}`)
+
+  // Old MCEdit schematic with numeric ids, including a modded block above 255 (AddBlocks).
+  const idReply = await command(session, `/faweselftest id minatocc_addblocks:mi_concrete`, { until: /\[SELFTEST\] id/ })
+  const modId = Number((idReply.find(t => t.includes('[SELFTEST] id')) || '').split(': ').pop())
+  if (modId > 0) {
+    writeLegacySchematic(path.join(SERVER_DIR, 'config', 'worldedit', 'schematics', 'bot-legacy.schematic'),
+      [1, 53, 35, modId], [0, 0, 1, 3])
+    r = await command(session, '//schem load bot-legacy.schematic', { until: /loaded|error|not/i })
+    // The schematic's origin is 0,0,0, so //paste -o places it at the world origin (bedrock layer of the test world).
+    await command(session, '//paste -o', { until: /pasted|error/i })
+    s = await scan([0, 0, 0], [3, 0, 0])
+    record('legacy MCEdit schematic with numeric ids (vanilla and modded id ' + modId + ')',
+      s.out['minecraft:stone:0'] === 1 && s.out['minecraft:oak_stairs:0'] === 1 && s.out['minecraft:wool:1'] === 1 &&
+      s.out['minatocc_addblocks:mi_concrete:3'] === 1, `${joined(r)} / ${s.line}`)
+    await command(session, '//undo', { until: /Undid|nothing|error/i })
+  } else {
+    record('legacy MCEdit schematic with numeric ids', false, 'could not read the modded block id')
+  }
 
   // Regeneration: fill part of the terrain with glass, regenerate it, undo brings the glass back.
   const t1 = [P[0] - 20, 40, P[1] - 20]

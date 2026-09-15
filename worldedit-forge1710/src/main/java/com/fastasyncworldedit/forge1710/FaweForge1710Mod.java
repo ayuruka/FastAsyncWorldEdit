@@ -103,10 +103,33 @@ public class FaweForge1710Mod {
             }
         }
         logger.info("{} block states carry tile entity data", tileStates);
+        registerModdedLegacyIds();
 
         if (Boolean.getBoolean("fawe.forge1710.selftest")) {
             event.registerServerCommand(new Forge1710SelfTestCommand());
         }
+    }
+
+    /**
+     * Old MCEdit schematics store numeric block ids. WorldEdit's legacy table only knows vanilla ids, so modded blocks
+     * (ids above 255, AddBlocks) would load as air; this world's Forge id mapping is registered for them.
+     */
+    private void registerModdedLegacyIds() {
+        com.sk89q.worldedit.world.registry.LegacyMapper legacy = com.sk89q.worldedit.world.registry.LegacyMapper.getInstance();
+        NativeBlockMapper mapper = NativeBlockMapper.get();
+        int registered = 0;
+        for (Object o : cpw.mods.fml.common.registry.GameData.getBlockRegistry()) {
+            net.minecraft.block.Block block = (net.minecraft.block.Block) o;
+            int id = net.minecraft.block.Block.getIdFromBlock(block);
+            if (id < 256) {
+                continue;
+            }
+            for (int meta = 0; meta < 16; meta++) {
+                legacy.register(id, meta, mapper.toState(block, meta));
+            }
+            registered++;
+        }
+        logger.info("Registered numeric ids of {} modded blocks for legacy schematics", registered);
     }
 
     @Mod.EventHandler
