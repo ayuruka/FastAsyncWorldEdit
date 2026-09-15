@@ -50,6 +50,26 @@ public class Forge1710SelfTestCommand extends CommandBase {
             nativeCount(sender, args);
             return;
         }
+        if (args.length == 4 && args[0].equals("tile")) {
+            reply(sender, tileInfo(sender, args));
+            return;
+        }
+        if (args.length == 7 && args[0].equals("entities")) {
+            reply(sender, entityInfo(sender, args));
+            return;
+        }
+        if (args.length == 1 && args[0].equals("pos") && sender instanceof net.minecraft.entity.player.EntityPlayerMP player) {
+            reply(sender, String.format(java.util.Locale.ROOT, "[SELFTEST] pos %.2f %.2f %.2f (FAWE: %s)", player.posX,
+                    player.posY, player.posZ, Forge1710Adapter.adapt(player).getLocation().toVector()));
+            return;
+        }
+        if (args.length == 3 && args[0].equals("biome")) {
+            int x = Integer.parseInt(args[1]);
+            int z = Integer.parseInt(args[2]);
+            net.minecraft.world.biome.BiomeGenBase biome = sender.getEntityWorld().getBiomeGenForCoords(x, z);
+            reply(sender, "[SELFTEST] biome " + x + " " + z + ": " + (biome == null ? "null" : biome.biomeName));
+            return;
+        }
         String modBlock = args.length > 0 ? args[0] : null;
         TaskManager.taskManager().async(() -> run(modBlock));
     }
@@ -82,6 +102,56 @@ public class Forge1710SelfTestCommand extends CommandBase {
         counts.forEach((key, count) -> text.append(' ').append(key).append('=').append(count));
         LOGGER.info(text.toString());
         sender.addChatMessage(new net.minecraft.util.ChatComponentText(text.toString()));
+    }
+
+    private static void reply(ICommandSender sender, String text) {
+        LOGGER.info(text);
+        sender.addChatMessage(new net.minecraft.util.ChatComponentText(text));
+    }
+
+    /** "[SELFTEST] tile x y z: <NBT>" or "none". */
+    private static String tileInfo(ICommandSender sender, String[] args) {
+        int x = Integer.parseInt(args[1]);
+        int y = Integer.parseInt(args[2]);
+        int z = Integer.parseInt(args[3]);
+        net.minecraft.tileentity.TileEntity tile = sender.getEntityWorld().getTileEntity(x, y, z);
+        String prefix = "[SELFTEST] tile " + x + " " + y + " " + z + ": ";
+        if (tile == null) {
+            return prefix + "none";
+        }
+        net.minecraft.nbt.NBTTagCompound tag = new net.minecraft.nbt.NBTTagCompound();
+        tile.writeToNBT(tag);
+        return prefix + tag;
+    }
+
+    /** "[SELFTEST] entities <n>: Name=count ..." for living, non-player entities whose block position is inside. */
+    private static String entityInfo(ICommandSender sender, String[] args) {
+        int x1 = Integer.parseInt(args[1]);
+        int y1 = Integer.parseInt(args[2]);
+        int z1 = Integer.parseInt(args[3]);
+        int x2 = Integer.parseInt(args[4]);
+        int y2 = Integer.parseInt(args[5]);
+        int z2 = Integer.parseInt(args[6]);
+        java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
+        int total = 0;
+        for (Object o : sender.getEntityWorld().loadedEntityList) {
+            net.minecraft.entity.Entity entity = (net.minecraft.entity.Entity) o;
+            if (entity.isDead || entity instanceof net.minecraft.entity.player.EntityPlayer) {
+                continue;
+            }
+            int ex = (int) Math.floor(entity.posX);
+            int ey = (int) Math.floor(entity.posY);
+            int ez = (int) Math.floor(entity.posZ);
+            if (ex < Math.min(x1, x2) || ex > Math.max(x1, x2) || ey < Math.min(y1, y2) || ey > Math.max(y1, y2)
+                    || ez < Math.min(z1, z2) || ez > Math.max(z1, z2)) {
+                continue;
+            }
+            counts.merge(String.valueOf(net.minecraft.entity.EntityList.getEntityString(entity)), 1, Integer::sum);
+            total++;
+        }
+        StringBuilder text = new StringBuilder("[SELFTEST] entities ").append(total).append(':');
+        counts.forEach((name, count) -> text.append(' ').append(name).append('=').append(count));
+        return text.toString();
     }
 
     private static <T> T sync(Supplier<T> supplier) {

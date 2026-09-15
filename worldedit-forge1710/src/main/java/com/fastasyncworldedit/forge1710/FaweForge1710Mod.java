@@ -3,6 +3,8 @@ package com.fastasyncworldedit.forge1710;
 import com.fastasyncworldedit.core.Fawe;
 import com.fastasyncworldedit.forge1710.entity.Forge1710Player;
 import com.fastasyncworldedit.forge1710.registry.NativeBlockMapper;
+import com.fastasyncworldedit.forge1710.registry.Forge1710Biomes;
+import com.fastasyncworldedit.forge1710.registry.Forge1710EntityTypes;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.event.platform.PlatformReadyEvent;
 import com.sk89q.worldedit.event.platform.PlatformUnreadyEvent;
@@ -86,7 +88,19 @@ public class FaweForge1710Mod {
 
         // Reads the (now frozen) Forge block registry. Must not touch FAWE block types until the platform is ready.
         NativeBlockMapper.get();
+        Forge1710Biomes.registerAll();
+        Forge1710EntityTypes.registerAll();
+        com.fastasyncworldedit.forge1710.registry.LegacyOrientation.install();
         WorldEdit.getInstance().getEventBus().post(new PlatformReadyEvent(platform));
+        // BlockState only switches to reading tile entity NBT once its material has been looked up (CompoundInput), so
+        // resolve every state's material up front; otherwise copies, clipboards and history drop chest/sign contents.
+        int tileStates = 0;
+        for (com.sk89q.worldedit.world.block.BlockState state : com.sk89q.worldedit.world.block.BlockTypesCache.states) {
+            if (state != null && state.getMaterial().hasContainer()) {
+                tileStates++;
+            }
+        }
+        logger.info("{} block states carry tile entity data", tileStates);
 
         if (Boolean.getBoolean("fawe.forge1710.selftest")) {
             event.registerServerCommand(new Forge1710SelfTestCommand());

@@ -113,6 +113,32 @@ public class BlockTransformExtent extends ResettableExtent {
     private Transform transform;
     private Transform transformInverse;
     private int[] BLOCK_ROTATION_BITMASK;
+    //FAWE start - platform hook
+    /**
+     * Rotates block states whose orientation is not expressed through block state properties, e.g. Forge 1.7.10 blocks
+     * that only have a numeric metadata property. Platforms install one with {@link #setPlatformTransformer}.
+     */
+    public interface PlatformStateTransformer {
+
+        /**
+         * @return whether this transformer orients the given block type
+         */
+        boolean handles(BlockType type);
+
+        /**
+         * @return the internal id of the transformed state, or -1 to leave the state unchanged
+         */
+        int transform(BlockState state, Transform transform);
+
+    }
+
+    private static volatile PlatformStateTransformer platformTransformer;
+
+    public static void setPlatformTransformer(@Nullable PlatformStateTransformer transformer) {
+        platformTransformer = transformer;
+    }
+    //FAWE end
+
     private int[][] BLOCK_TRANSFORM;
     private int[][] BLOCK_TRANSFORM_INVERSE;
 
@@ -433,6 +459,13 @@ public class BlockTransformExtent extends ResettableExtent {
         int newMaskedId = state.getInternalId();
 
         BlockType type = state.getBlockType();
+        //FAWE start - platform hook
+        PlatformStateTransformer platform = platformTransformer;
+        if (platform != null && platform.handles(type)) {
+            int transformed = platform.transform(state, transform);
+            return transformed < 0 ? newMaskedId : transformed;
+        }
+        //FAWE end
         // Rotate North, East, South, West
         if (type.hasProperty(PropertyKey.NORTH) && type.hasProperty(PropertyKey.EAST) && type.hasProperty(PropertyKey.SOUTH) && type
                 .hasProperty(PropertyKey.WEST)) {
@@ -484,6 +517,18 @@ public class BlockTransformExtent extends ResettableExtent {
             BLOCK_TRANSFORM_INVERSE[i] = ALL;
             BlockType type = BlockTypes.get(i);
             int bitMask = 0;
+            PlatformStateTransformer platform = platformTransformer;
+            if (platform != null && platform.handles(type)) {
+                BLOCK_TRANSFORM[i] = null;
+                BLOCK_TRANSFORM_INVERSE[i] = null;
+                for (AbstractProperty<?> property : (Collection<AbstractProperty>) (Collection) type.getProperties()) {
+                    bitMask |= property.getBitMask();
+                }
+                if (bitMask != 0) {
+                    BLOCK_ROTATION_BITMASK[i] = bitMask;
+                }
+                continue;
+            }
             for (AbstractProperty<?> property : (Collection<AbstractProperty>) (Collection) type.getProperties()) {
                 if (isDirectional(property)) {
                     BLOCK_TRANSFORM[i] = null;

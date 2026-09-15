@@ -71,7 +71,7 @@ public class Forge1710CommandSender extends AbstractNonPlayerActor {
 
     @Override
     public Locale getLocale() {
-        return Locale.US;
+        return com.sk89q.worldedit.WorldEdit.getInstance().getConfiguration().defaultLocale;
     }
 
     @Override

@@ -25,6 +25,14 @@ import com.sk89q.worldedit.world.generation.TreeType;
 import com.fastasyncworldedit.forge1710.Forge1710Adapter;
 import net.minecraft.block.Block;
 import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.player.EntityPlayer;
+import com.fastasyncworldedit.forge1710.entity.Forge1710Entity;
+import com.fastasyncworldedit.forge1710.internal.NativeData;
+import com.fastasyncworldedit.forge1710.registry.Forge1710Biomes;
+import com.sk89q.worldedit.entity.Entity;
+import com.sk89q.worldedit.regions.Region;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.network.play.server.S21PacketChunkData;
@@ -33,6 +41,7 @@ import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.EmptyChunk;
 
 import javax.annotation.Nullable;
 import java.lang.ref.WeakReference;
@@ -74,15 +83,20 @@ public class Forge1710World extends AbstractWorld {
     }
 
     /**
-     * Loaded chunks are read directly; unloaded chunks are loaded on the server thread (chunk providers are not
-     * thread safe in 1.7.10).
+     * Always looked up on the server thread. The chunk provider's loaded-chunk map is not thread safe; a lookup from an
+     * edit thread can miss while the server thread changes the map, and then 1.7.10 hands out its shared EmptyChunk,
+     * which reads as air (seen as an intermittent "//count stone" = 0 right after "//set stone"). Chunk readers keep the
+     * result for the rest of the edit, so this costs one round trip per chunk.
      */
     public Chunk getChunk(int chunkX, int chunkZ) {
         WorldServer world = getWorld();
-        if (Fawe.isMainThread() || world.theChunkProviderServer.chunkExists(chunkX, chunkZ)) {
-            return world.getChunkFromChunkCoords(chunkX, chunkZ);
-        }
-        return onMainThread(() -> world.getChunkFromChunkCoords(chunkX, chunkZ));
+        return onMainThread(() -> {
+            Chunk chunk = world.getChunkFromChunkCoords(chunkX, chunkZ);
+            if (chunk instanceof EmptyChunk) {
+                chunk = world.theChunkProviderServer.loadChunk(chunkX, chunkZ);
+            }
+            return chunk;
+        });
     }
 
     @Override
@@ -155,7 +169,15 @@ public class Forge1710World extends AbstractWorld {
 
     @Override
     public BaseBlock getFullBlock(int x, int y, int z) {
-        return getBlock(x, y, z).toBaseBlock();
+        BlockState state = getBlock(x, y, z);
+        if (y < 0 || y > 255) {
+            return state.toBaseBlock();
+        }
+        FaweCompoundTag tag = onMainThread(() -> {
+            TileEntity tile = getWorld().getTileEntity(x, y, z);
+            return tile == null ? null : NativeData.tile(tile);
+        });
+        return tag == null ? state.toBaseBlock() : state.toBaseBlock(com.sk89q.worldedit.util.concurrency.LazyReference.computed(tag.linTag()));
     }
 
     @Override
@@ -165,9 +187,7 @@ public class Forge1710World extends AbstractWorld {
 
     @Override
     public BiomeType getBiomeType(int x, int y, int z) {
-        BiomeGenBase biome = getWorld().getBiomeGenForCoords(x, z);
-        BiomeType type = biome == null ? null : BiomeTypes.get(Forge1710Adapter.biomeId(biome));
-        return type != null ? type : BiomeTypes.PLAINS;
+        return Forge1710Biomes.toFawe(getWorld().getBiomeGenForCoords(x, z));
     }
 
     @Override
@@ -177,12 +197,53 @@ public class Forge1710World extends AbstractWorld {
 
     @Override
     public boolean setBiome(BlockVector3 position, BiomeType biome) {
-        return false;
+        return setBiome(position.x(), position.y(), position.z(), biome);
     }
 
     @Override
     public boolean setBiome(int x, int y, int z, BiomeType biome) {
-        return false;
+        int nativeId = Forge1710Biomes.toNative(biome);
+        if (nativeId < 0) {
+            return false;
+        }
+        return onMainThread(() -> {
+            Chunk chunk = getWorld().getChunkFromChunkCoords(x >> 4, z >> 4);
+            int[] ids = Forge1710Biomes.read(chunk);
+            ids[(z & 15) << 4 | (x & 15)] = nativeId;
+            Forge1710Biomes.write(chunk, ids);
+            return true;
+        });
+    }
+
+    @Override
+    public List<? extends Entity> getEntities(Region region) {
+        return onMainThread(() -> {
+            List<Entity> out = new ArrayList<>();
+            for (Object o : getWorld().loadedEntityList) {
+                net.minecraft.entity.Entity entity = (net.minecraft.entity.Entity) o;
+                if (entity instanceof EntityPlayer || entity.isDead) {
+                    continue;
+                }
+                if (region.contains(BlockVector3.at(Math.floor(entity.posX), Math.floor(entity.posY), Math.floor(entity.posZ)))) {
+                    out.add(new Forge1710Entity(entity));
+                }
+            }
+            return out;
+        });
+    }
+
+    @Override
+    public List<? extends Entity> getEntities() {
+        return onMainThread(() -> {
+            List<Entity> out = new ArrayList<>();
+            for (Object o : getWorld().loadedEntityList) {
+                net.minecraft.entity.Entity entity = (net.minecraft.entity.Entity) o;
+                if (!(entity instanceof EntityPlayer) && !entity.isDead) {
+                    out.add(new Forge1710Entity(entity));
+                }
+            }
+            return out;
+        });
     }
 
     @Override

@@ -17,12 +17,12 @@ public class Forge1710BlockMaterial implements BlockMaterial {
     private final Material material;
     private final boolean hasTile;
 
-    public Forge1710BlockMaterial(Block block) {
+    public Forge1710BlockMaterial(Block block, int meta) {
         this.block = block;
         this.material = block.getMaterial();
         boolean tile;
         try {
-            tile = block.hasTileEntity(0);
+            tile = block.hasTileEntity(meta);
         } catch (Throwable t) {
             tile = false;
         }

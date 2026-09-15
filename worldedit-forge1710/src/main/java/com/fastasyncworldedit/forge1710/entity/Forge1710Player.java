@@ -17,6 +17,11 @@ import com.sk89q.worldedit.world.World;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.IChatComponent;
+import cpw.mods.fml.relauncher.ReflectionHelper;
+import com.sk89q.worldedit.WorldEdit;
+import com.sk89q.worldedit.util.formatting.text.serializer.gson.GsonComponentSerializer;
+import com.sk89q.worldedit.util.formatting.text.serializer.plain.PlainComponentSerializer;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.world.WorldServer;
 import org.apache.logging.log4j.LogManager;
@@ -124,7 +129,20 @@ public class Forge1710Player extends AbstractPlayerActor {
 
     @Override
     public void print(Component component) {
-        send(LegacyComponentSerializer.legacy().serialize(WorldEditText.format(component, getLocale())), null);
+        Component rendered = WorldEditText.format(component, getLocale());
+        if (LOG_CHAT) {
+            LOGGER.info("[-> {}] {}", getName(), PlainComponentSerializer.INSTANCE.serialize(rendered));
+        }
+        IChatComponent chat;
+        try {
+            // WorldEdit's text library writes the same JSON dialect as 1.7.10 (hoverEvent "value"), so colours, hover
+            // text and click actions survive.
+            chat = IChatComponent.Serializer.func_150699_a(GsonComponentSerializer.INSTANCE.serialize(rendered));
+        } catch (RuntimeException e) {
+            chat = new ChatComponentText(LegacyComponentSerializer.legacy().serialize(rendered));
+        }
+        IChatComponent message = chat;
+        runSync(() -> player.addChatMessage(message));
     }
 
     @Override
@@ -156,7 +174,16 @@ public class Forge1710Player extends AbstractPlayerActor {
 
     @Override
     public Locale getLocale() {
-        return Locale.US;
+        // The client reports its language (e.g. "ja_JP") in C15PacketClientSettings.
+        String language = null;
+        try {
+            language = ReflectionHelper.getPrivateValue(EntityPlayerMP.class, player, "translator", "field_71148_cg");
+        } catch (RuntimeException ignored) {
+        }
+        if (language == null || language.isEmpty()) {
+            return WorldEdit.getInstance().getConfiguration().defaultLocale;
+        }
+        return Locale.forLanguageTag(language.replace('_', '-'));
     }
 
     @Override

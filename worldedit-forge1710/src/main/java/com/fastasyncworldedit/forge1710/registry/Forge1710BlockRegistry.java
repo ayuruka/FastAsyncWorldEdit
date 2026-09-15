@@ -42,7 +42,21 @@ public class Forge1710BlockRegistry implements BlockRegistry {
         // FAWE registers ids 1.7.10 does not have (minecraft:__reserved__, cave_air, void_air) and requires a material for
         // every type, so anything without a native block behaves like air.
         Block backing = block != null ? block : Blocks.air;
-        return materials.computeIfAbsent(blockType.id(), id -> new Forge1710BlockMaterial(backing));
+        return materials.computeIfAbsent(blockType.id(), id -> new Forge1710BlockMaterial(backing, 0));
+    }
+
+    /**
+     * Per state, because 1.7.10's {@code Block.hasTileEntity(meta)} depends on metadata (FAWE decides from the material
+     * whether a state carries tile entity NBT).
+     */
+    @Override
+    public BlockMaterial getMaterial(BlockState state) {
+        int nativeId = NativeBlockMapper.get().toNative(state.getOrdinal());
+        if (nativeId < 0) {
+            return getMaterial(state.getBlockType());
+        }
+        return materials.computeIfAbsent(state.getBlockType().id() + "#" + (nativeId & 15),
+                id -> new Forge1710BlockMaterial(Block.getBlockById(nativeId >> 4), nativeId & 15));
     }
 
     @Override

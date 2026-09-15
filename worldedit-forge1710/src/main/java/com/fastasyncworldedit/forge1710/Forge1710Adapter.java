@@ -36,8 +36,7 @@ public final class Forge1710Adapter {
     }
 
     public static String biomeId(BiomeGenBase biome) {
-        String name = biome.biomeName == null ? "biome_" + biome.biomeID : biome.biomeName;
-        return "minecraft:" + name.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+        return com.fastasyncworldedit.forge1710.registry.Forge1710Biomes.id(biome);
     }
 
     public static BaseItemStack adapt(@Nullable ItemStack stack) {

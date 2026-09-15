@@ -9,6 +9,18 @@ import com.fastasyncworldedit.core.queue.IChunkSet;
 import com.fastasyncworldedit.core.queue.IQueueExtent;
 import com.fastasyncworldedit.core.queue.implementation.blocks.CharGetBlocks;
 import com.fastasyncworldedit.forge1710.registry.NativeBlockMapper;
+import com.fastasyncworldedit.core.util.NbtUtils;
+import com.fastasyncworldedit.forge1710.entity.Forge1710Entity;
+import com.fastasyncworldedit.forge1710.internal.NativeData;
+import com.fastasyncworldedit.forge1710.registry.Forge1710Biomes;
+import com.sk89q.worldedit.world.biome.BiomeTypes;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.tileentity.TileEntity;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import com.sk89q.worldedit.entity.Entity;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.util.SideEffect;
@@ -55,16 +67,24 @@ public class Forge1710GetBlocks extends CharGetBlocks {
     private boolean createCopy;
     private int copyKey;
 
+    static final boolean DEBUG = Boolean.getBoolean("fawe.forge1710.debugQueue");
+
     public Forge1710GetBlocks(Forge1710World world, int chunkX, int chunkZ) {
         super(0, SECTIONS - 1);
         this.world = world;
         this.chunkX = chunkX;
         this.chunkZ = chunkZ;
+        if (DEBUG) {
+            LOGGER.info("[QDEBUG] new get {} chunk {},{} thread {}", System.identityHashCode(this), chunkX, chunkZ,
+                    Thread.currentThread().getName());
+        }
     }
 
     // Readers only live for one edit (see Forge1710QueueHandler), so keeping the chunk avoids a server-thread round
     // trip for every hasSection/update call.
     private volatile Chunk chunk;
+    private volatile Map<BlockVector3, FaweCompoundTag> tileCache;
+    private volatile int[] nativeBiomes;
 
     private Chunk chunk() {
         Chunk local = chunk;
@@ -81,7 +101,13 @@ public class Forge1710GetBlocks extends CharGetBlocks {
      */
     @Override
     public boolean hasSection(int layer) {
-        return layer >= 0 && layer < SECTIONS && chunk().getBlockStorageArray()[layer] != null;
+        boolean result = layer >= 0 && layer < SECTIONS && chunk().getBlockStorageArray()[layer] != null;
+        if (DEBUG && !result) {
+            LOGGER.info("[QDEBUG] hasSection false get {} chunk {},{} layer {} chunkClass {} thread {}",
+                    System.identityHashCode(this), chunkX, chunkZ, layer, chunk().getClass().getSimpleName(),
+                    Thread.currentThread().getName());
+        }
+        return result;
     }
 
     @Override
@@ -95,6 +121,10 @@ public class Forge1710GetBlocks extends CharGetBlocks {
             data = new char[4096];
         }
         readSection(chunk(), layer, data);
+        if (DEBUG) {
+            LOGGER.info("[QDEBUG] read get {} chunk {},{} layer {} first={} thread {}", System.identityHashCode(this), chunkX,
+                    chunkZ, layer, (int) data[0], Thread.currentThread().getName());
+        }
         return data;
     }
 
@@ -160,6 +190,29 @@ public class Forge1710GetBlocks extends CharGetBlocks {
         NativeBlockMapper mapper = NativeBlockMapper.get();
         int bx = chunkX << 4;
         int bz = chunkZ << 4;
+
+        // Tile entities in positions that get a new block are saved for history and removed, like the Bukkit adapter.
+        if (!chunk.chunkTileEntityMap.isEmpty()) {
+            for (Object value : new ArrayList<>(chunk.chunkTileEntityMap.values())) {
+                TileEntity tile = (TileEntity) value;
+                int layer = tile.yCoord >> 4;
+                if (layer < 0 || layer >= SECTIONS || !set.hasSection(layer)) {
+                    continue;
+                }
+                char ordinal = set.getBlock(tile.xCoord & 15, tile.yCoord, tile.zCoord & 15).getOrdinalChar();
+                if (ordinal == BlockTypesCache.ReservedIDs.__RESERVED__) {
+                    continue;
+                }
+                if (snapshot != null) {
+                    FaweCompoundTag tag = NativeData.tile(tile);
+                    if (tag != null) {
+                        snapshot.storeTile(BlockVector3.at(tile.xCoord, tile.yCoord, tile.zCoord), tag);
+                    }
+                }
+                nmsWorld.removeTileEntity(tile.xCoord, tile.yCoord, tile.zCoord);
+            }
+        }
+
         for (int layer = 0; layer < SECTIONS; layer++) {
             if (!set.hasSection(layer)) {
                 continue;
@@ -192,11 +245,127 @@ public class Forge1710GetBlocks extends CharGetBlocks {
                     continue;
                 }
                 nmsWorld.setBlock(x, y, z, block, meta, flags);
+                // Some blocks pick their own metadata when placed (chests face away from neighbours, rails and
+                // stairs re-orient); FAWE must reproduce the exact state, e.g. for undo.
+                if (chunk.getBlock(x & 15, y, z & 15) == block && chunk.getBlockMetadata(x & 15, y, z & 15) != meta) {
+                    nmsWorld.setBlockMetadataWithNotify(x, y, z, meta, 2);
+                }
             }
             synchronized (sectionLocks[layer]) {
                 blocks[layer] = null;
             }
         }
+
+        boolean biomesChanged = applyBiomes(set, chunk, snapshot);
+
+        Set<UUID> removes = set.getEntityRemoves();
+        if (removes != null && !removes.isEmpty()) {
+            Set<UUID> removed = new HashSet<>();
+            for (net.minecraft.entity.Entity entity : chunkEntities(chunk)) {
+                UUID uuid = entity.getUniqueID();
+                if (removes.contains(uuid)) {
+                    if (snapshot != null) {
+                        FaweCompoundTag tag = NativeData.entity(entity);
+                        if (tag != null) {
+                            snapshot.storeEntity(tag);
+                        }
+                    }
+                    entity.setDead();
+                    removed.add(uuid);
+                }
+            }
+            // Only entities that were really removed belong in history.
+            removes.clear();
+            removes.addAll(removed);
+        }
+
+        Collection<FaweCompoundTag> spawns = set.entities();
+        if (spawns != null && !spawns.isEmpty()) {
+            Iterator<FaweCompoundTag> iterator = spawns.iterator();
+            while (iterator.hasNext()) {
+                if (NativeData.spawn(nmsWorld, iterator.next()) == null) {
+                    iterator.remove();
+                }
+            }
+        }
+
+        Map<BlockVector3, FaweCompoundTag> tiles = set.tiles();
+        if (tiles != null && !tiles.isEmpty()) {
+            for (Map.Entry<BlockVector3, FaweCompoundTag> entry : tiles.entrySet()) {
+                BlockVector3 pos = entry.getKey();
+                NativeData.loadTile(nmsWorld, bx + (pos.x() & 15), pos.y(), bz + (pos.z() & 15), entry.getValue());
+            }
+        }
+
+        tileCache = null;
+        nativeBiomes = null;
+        if (DEBUG) {
+            LOGGER.info("[QDEBUG] applied get {} chunk {},{}", System.identityHashCode(this), chunkX, chunkZ);
+        }
+        chunk.setChunkModified();
+        if (biomesChanged) {
+            Forge1710World.resendChunk(nmsWorld, chunkX, chunkZ);
+        }
+    }
+
+    /**
+     * FAWE biomes are 4x4x4 cells per section; 1.7.10 has one biome per column. The highest cell set in a column wins.
+     */
+    private boolean applyBiomes(IChunkSet set, Chunk chunk, @Nullable Forge1710GetBlocksCopy snapshot) {
+        BiomeType[][] biomes = set.getBiomes();
+        if (biomes == null) {
+            return false;
+        }
+        int[] current = Forge1710Biomes.read(chunk);
+        int[] updated = current.clone();
+        boolean changed = false;
+        for (int layer = Math.min(biomes.length, SECTIONS) - 1; layer >= 0; layer--) {
+            BiomeType[] cells = biomes[layer];
+            if (cells == null) {
+                continue;
+            }
+            for (int cellZ = 0; cellZ < 4; cellZ++) {
+                for (int cellX = 0; cellX < 4; cellX++) {
+                    BiomeType type = null;
+                    for (int cellY = 3; cellY >= 0 && type == null; cellY--) {
+                        type = cells[cellY << 4 | cellZ << 2 | cellX];
+                    }
+                    int nativeId = Forge1710Biomes.toNative(type);
+                    if (nativeId < 0) {
+                        continue;
+                    }
+                    for (int z = cellZ << 2; z < (cellZ + 1) << 2; z++) {
+                        for (int x = cellX << 2; x < (cellX + 1) << 2; x++) {
+                            int index = z << 4 | x;
+                            if (updated[index] != nativeId && updated[index] == current[index]) {
+                                updated[index] = nativeId;
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (changed) {
+            if (snapshot != null) {
+                snapshot.storeBiomes(current);
+            }
+            Forge1710Biomes.write(chunk, updated);
+        }
+        return changed;
+    }
+
+    private static List<net.minecraft.entity.Entity> chunkEntities(Chunk chunk) {
+        List<net.minecraft.entity.Entity> out = new ArrayList<>();
+        for (List<?> list : chunk.entityLists) {
+            for (Object o : list) {
+                net.minecraft.entity.Entity entity = (net.minecraft.entity.Entity) o;
+                if (!(entity instanceof EntityPlayer) && !entity.isDead) {
+                    out.add(entity);
+                }
+            }
+        }
+        return out;
     }
 
     /**
@@ -208,7 +377,17 @@ public class Forge1710GetBlocks extends CharGetBlocks {
 
     @Override
     public BiomeType getBiomeType(int x, int y, int z) {
-        return world.getBiomeType((chunkX << 4) + (x & 15), y, (chunkZ << 4) + (z & 15));
+        int[] local = nativeBiomes;
+        if (local == null) {
+            local = Forge1710Biomes.read(chunk());
+            nativeBiomes = local;
+        }
+        int id = local[(z & 15) << 4 | (x & 15)];
+        if (id < 0) {
+            return world.getBiomeType((chunkX << 4) + (x & 15), y, (chunkZ << 4) + (z & 15));
+        }
+        BiomeType type = Forge1710Biomes.toFawe(id);
+        return type != null ? type : BiomeTypes.PLAINS;
     }
 
     @Override
@@ -235,12 +414,23 @@ public class Forge1710GetBlocks extends CharGetBlocks {
 
     @Override
     public @Nullable FaweCompoundTag entity(UUID uuid) {
+        for (FaweCompoundTag tag : entities()) {
+            if (uuid.equals(NbtUtils.uuid(tag))) {
+                return tag;
+            }
+        }
         return null;
     }
 
     @Override
     public Set<Entity> getFullEntities() {
-        return Collections.emptySet();
+        return Forge1710World.onMainThread(() -> {
+            Set<Entity> out = new HashSet<>();
+            for (net.minecraft.entity.Entity entity : chunkEntities(chunk())) {
+                out.add(new Forge1710Entity(entity));
+            }
+            return out;
+        });
     }
 
     @Override
@@ -296,17 +486,52 @@ public class Forge1710GetBlocks extends CharGetBlocks {
 
     @Override
     public Map<BlockVector3, FaweCompoundTag> tiles() {
-        return Collections.emptyMap();
+        Map<BlockVector3, FaweCompoundTag> local = tileCache;
+        if (local == null) {
+            local = Forge1710World.onMainThread(() -> {
+                Chunk chunk = chunk();
+                if (chunk.chunkTileEntityMap.isEmpty()) {
+                    return Collections.<BlockVector3, FaweCompoundTag>emptyMap();
+                }
+                Map<BlockVector3, FaweCompoundTag> out = new HashMap<>();
+                for (Object value : chunk.chunkTileEntityMap.values()) {
+                    TileEntity tile = (TileEntity) value;
+                    if (tile.isInvalid()) {
+                        continue;
+                    }
+                    FaweCompoundTag tag = NativeData.tile(tile);
+                    if (tag != null) {
+                        out.put(BlockVector3.at(tile.xCoord, tile.yCoord, tile.zCoord), tag);
+                    }
+                }
+                return out;
+            });
+            tileCache = local;
+        }
+        return local;
     }
 
     @Override
     public @Nullable FaweCompoundTag tile(int x, int y, int z) {
-        return null;
+        Map<BlockVector3, FaweCompoundTag> local = tiles();
+        if (local.isEmpty()) {
+            return null;
+        }
+        return local.get(BlockVector3.at((chunkX << 4) + (x & 15), y, (chunkZ << 4) + (z & 15)));
     }
 
     @Override
     public Collection<FaweCompoundTag> entities() {
-        return Collections.emptyList();
+        return Forge1710World.onMainThread(() -> {
+            List<FaweCompoundTag> out = new ArrayList<>();
+            for (net.minecraft.entity.Entity entity : chunkEntities(chunk())) {
+                FaweCompoundTag tag = NativeData.entity(entity);
+                if (tag != null) {
+                    out.add(tag);
+                }
+            }
+            return out;
+        });
     }
 
     @Override
