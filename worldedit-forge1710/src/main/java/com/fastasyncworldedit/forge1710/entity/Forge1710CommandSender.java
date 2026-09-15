@@ -60,6 +60,7 @@ public class Forge1710CommandSender extends AbstractNonPlayerActor {
     }
 
     private void send(String msg) {
+        msg = com.fastasyncworldedit.forge1710.CommandHelpTranslator.translate(msg, getLocale());
         for (String part : msg.split("\n")) {
             Runnable r = () -> sender.addChatMessage(new ChatComponentText(part));
             if (Fawe.isMainThread()) {

@@ -562,16 +562,23 @@ async function runFeatureTests (session) {
   record('undo //forest removes the trees', s.count('minecraft:log:') === 0 && s.count('minecraft:leaves:') === 0, `${joined(r)} / ${s.line.slice(0, 200)}`)
 
   // //snow works in a radius around the player (the bot stands on the spawn terrain).
-  r = await command(session, '//snow 6', { until: done, maxMs: 60000 })
-  await sleep(1500)
+  // Snow left by earlier runs (or weather) stays in the test world, so compare with the count just before //snow.
   const py = Math.floor(pos.y)
-  s = await scan([P[0] - 6, py - 12, P[1] - 6], [P[0] + 6, py + 4, P[1] + 6])
+  const snowArea = [[P[0] - 6, py - 12, P[1] - 6], [P[0] + 6, py + 4, P[1] + 6]]
+  await select(...snowArea)
+  await command(session, '//replace snow air', { until: /replaced|error/i, maxMs: 60000 })
+  s = await scan(...snowArea)
+  const snowBefore = s.count('minecraft:snow_layer:')
+  r = await command(session, '//snow 6', { until: /covered|error/i, maxMs: 60000 })
+  await sleep(1500)
+  s = await scan(...snowArea)
   const snowCount = s.count('minecraft:snow_layer:')
-  record('//snow places snow layers around the player', snowCount > 0, `${joined(r)} / snow_layer=${snowCount}`)
+  record('//snow places snow layers around the player', snowCount > snowBefore, `${joined(r)} / snow_layer ${snowBefore} -> ${snowCount}`)
   r = await command(session, '//undo', { until: /Undid|nothing|error/i })
   await sleep(1500)
-  s = await scan([P[0] - 6, py - 12, P[1] - 6], [P[0] + 6, py + 4, P[1] + 6])
-  record('undo //snow removes the snow', s.count('minecraft:snow_layer:') < snowCount, `${joined(r)} / snow_layer=${s.count('minecraft:snow_layer:')}`)
+  s = await scan(...snowArea)
+  record('undo //snow removes the snow', s.count('minecraft:snow_layer:') === snowBefore,
+    `${joined(r)} / snow_layer ${snowBefore} -> ${snowCount} -> ${s.count('minecraft:snow_layer:')}`)
 
   // Lighting after fast writes: a light source in a closed cave lights its neighbours, and removing it darkens them.
   const cave1 = [P[0] + 30, 20, P[1]]

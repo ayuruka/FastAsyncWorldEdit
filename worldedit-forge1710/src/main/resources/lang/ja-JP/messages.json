@@ -1,0 +1,263 @@
+{
+  "exact": {
+    "Too many arguments.": "引数が多すぎます。",
+    "Not enough arguments.": "引数が足りません。",
+    "Argument-accepting flags must be at the end of combined flag groups.": "値を取るフラグは、まとめて書いたフラグの最後に置いてください。",
+    "Help": "ヘルプ",
+    "Additional Help": "その他のヘルプ",
+    "Block Distribution": "ブロックの分布",
+    "Available Biomes": "使えるバイオーム",
+    "Selected Chunks": "選択中のチャンク",
+    "Side Effects": "副作用",
+    "System Information": "システム情報",
+    "WorldEdit Configuration": "WorldEdit の設定",
+    "Selection modes": "選択モード",
+    "Edits:": "編集:",
+    "No results found.": "見つかりませんでした。",
+    "Click to navigate": "クリックでページを移動",
+    "Click to select": "クリックで選択",
+    "Click to copy": "クリックでコピー",
+    "Click to use": "クリックで使用",
+    "An error occurred": "エラーが発生しました",
+    "Any integer": "任意の整数",
+    "any pattern": "任意のパターン",
+    "any mask": "任意のマスク",
+    "any transform": "任意の変形",
+    "any block": "任意のブロック",
+    "any item": "任意のアイテム",
+    "any double": "任意の数値",
+    "any float": "任意の数値",
+    "any integer": "任意の整数",
+    "any int": "任意の整数",
+    "any long": "任意の整数",
+    "any short": "任意の整数",
+    "any byte": "任意の整数",
+    "any boolean": "true または false",
+    "any text": "任意の文字列",
+    "any character": "任意の 1 文字",
+    "any date": "任意の日時",
+    "any world": "任意のワールド",
+    "any world, x, y, and z": "ワールドと x, y, z",
+    "any side effect": "任意の副作用",
+    "any clipboard format": "任意のクリップボード形式",
+    "any clipboard share destination": "任意の共有先",
+    "A player or coordinates are required.": "プレイヤーか座標を指定してください。",
+    "Only a player can use relative directions": "相対方向を使えるのはプレイヤーだけです",
+    "You must either specify 1 or 2 radius values.": "半径は 1 つか 2 つ指定してください。",
+    "You must either specify 1 or 3 radius values.": "半径は 1 つか 3 つ指定してください。",
+    "You must specify a pattern": "パターンを指定してください",
+    "Count must be >= 1": "個数は 1 以上にしてください",
+    "Radius must be >= 0": "半径は 0 以上にしてください",
+    "Thickness must be >= 0": "厚さは 0 以上にしてください",
+    "Time must be >= 0": "時間は 0 以上にしてください",
+    "Multiplier must be >= 1": "倍率は 1 以上にしてください",
+    "Density must be between 0 and 100": "密度は 0 から 100 の間で指定してください",
+    "Density must be in [0, 100]": "密度は 0 から 100 の間で指定してください",
+    "Maximum must be bigger than 1, or exactly -1": "最大値は 1 より大きい数か、-1 にしてください",
+    "Must have exactly 1 world and 3 vector components": "ワールド 1 つと座標 3 つを指定してください",
+    "This command is currently not implemented.": "このコマンドはまだ実装されていません。",
+    "There is not yet a replacement for //fast": "//fast に代わるコマンドはまだありません",
+    "Dimensions too large for this clipboard format. Use //lazycopy for large selections.": "このクリップボード形式には大きすぎます。大きな範囲には //lazycopy を使ってください。",
+    "Dimensions are too large for this clipboard format.": "このクリップボード形式には大きすぎます。",
+    "Width of region too large for a .schematic": "範囲の幅が .schematic には大きすぎます",
+    "Height of region too large for a .schematic": "範囲の高さが .schematic には大きすぎます",
+    "Length of region too large for a .schematic": "範囲の奥行きが .schematic には大きすぎます",
+    "Couldn't find world folder for this world.": "このワールドのフォルダーが見つかりません。",
+    "Error reading existing chunk file.": "既存のチャンク一覧ファイルを読めませんでした。",
+    "History on disk not enabled!": "ディスクへの履歴保存が有効になっていません。",
+    "Please wait while we generate the minified heightmaps.": "縮小した高さマップを作成しています。お待ちください。",
+    "Done import!": "取り込みが完了しました。",
+    "Must be a pattern list!": "パターンの一覧を指定してください。",
+    "Cannot enable biome-aware mode; not yet implemented": "バイオーム対応モードはまだ実装されていません",
+    "CANNOT REMOVE": "削除できません"
+  },
+  "fixed": {
+    "Missing argument for ": "引数が足りません: ",
+    "Invalid value for ": "値が正しくありません: ",
+    ", acceptable values are ": "。使える値: ",
+    "Invalid sub-command '": "サブコマンド '",
+    "'. Options: ": "' はありません。候補: ",
+    "' is not a valid flag for ": "' は次のコマンドでは使えないフラグです: ",
+    ", as it does not have any flags": "（このコマンドにはフラグがありません）",
+    " has already been specified.": " はすでに指定されています。",
+    " (defaults to ": " (既定値: ",
+    "comma separated values of: ": "カンマ区切りの値: ",
+    "Missing these blocks: ": "足りないブロック: ",
+    " [Amt: ": " [数: "
+  },
+  "patterns": [
+    [
+      "^No sub-command provided\\. Options: (.*)$",
+      "サブコマンドを指定してください。候補: $1"
+    ],
+    [
+      "^No such command: (.*)$",
+      "コマンドが見つかりません: $1"
+    ],
+    [
+      "^Condition failed: (.*)$",
+      "実行条件を満たしていません: $1"
+    ],
+    [
+      "^Flag '$",
+      "フラグ '"
+    ],
+    [
+      "^Flag $",
+      "フラグ "
+    ],
+    [
+      "^\\. Options: $",
+      "。使えるフラグ: "
+    ],
+    [
+      "^Page $",
+      "ページ "
+    ],
+    [
+      "^ of $",
+      " / "
+    ],
+    [
+      "^up to $",
+      "最大 "
+    ],
+    [
+      "^Snapshots for: (.*)$",
+      "スナップショット一覧: $1"
+    ],
+    [
+      "^Search results for '(.*)$",
+      "検索結果: '$1"
+    ],
+    [
+      "^Subcommands: (.*)$",
+      "サブコマンド: $1"
+    ],
+    [
+      "^\\| My Schematics: (.*) \\|$",
+      "| 自分のスケマティック: $1 |"
+    ],
+    [
+      "^\\| Schematics: (.*) \\|$",
+      "| スケマティック: $1 |"
+    ],
+    [
+      "^Schematic (.+) does not exist! (.*)$",
+      "スケマティック $1 は存在しません $2"
+    ],
+    [
+      "^`me` to use facing direction, or any non-diagonal direction$",
+      "`me`（向いている方向）、または斜め以外の方向"
+    ],
+    [
+      "^`me` to use facing direction, or any direction$",
+      "`me`（向いている方向）、または任意の方向"
+    ],
+    [
+      "For input string: \"(.*)\"",
+      "数値ではありません: \"$1\""
+    ],
+    [
+      "Not a valid argument: (.*)",
+      "有効な値ではありません: $1"
+    ],
+    [
+      "^Invalid value: (.*)$",
+      "無効な値です: $1"
+    ],
+    [
+      "^Invalid boolean value: (.*)$",
+      "true / false ではありません: $1"
+    ],
+    [
+      "^Invalid int value: (.*)$",
+      "整数ではありません: $1"
+    ],
+    [
+      "^Invalid direction value: (.*)$",
+      "方向ではありません: $1"
+    ],
+    [
+      "^Property not found: (.*)$",
+      "プロパティが見つかりません: $1"
+    ],
+    [
+      "Not a valid world: ([^)]*)",
+      "ワールドが見つかりません: $1"
+    ],
+    [
+      "Not a valid schematic format: ([^)]*)",
+      "スケマティックの形式ではありません: $1"
+    ],
+    [
+      "Not a valid clipboard share destination: ([^)]*)",
+      "共有先ではありません: $1"
+    ],
+    [
+      "Not a date: ([^)]*)",
+      "日時ではありません: $1"
+    ],
+    [
+      "Not a valid ([^:]+): ([^)]*)",
+      "$1 ではありません: $2"
+    ],
+    [
+      "^Must have exactly (\\d+) vector components$",
+      "座標を $1 つ指定してください"
+    ],
+    [
+      "^Must have (\\d+) vector components$",
+      "座標を $1 つ指定してください"
+    ],
+    [
+      "^Acceptable types: (.*)$",
+      "使える種類: $1"
+    ],
+    [
+      "^Missing permission (.*)$",
+      "権限がありません: $1"
+    ],
+    [
+      "^Started new selection with vertex (.*)\\.$",
+      "頂点 $1 から新しい選択を始めました。"
+    ],
+    [
+      "^Added vertex (.*) to the selection\\.$",
+      "頂点 $1 を選択範囲に追加しました。"
+    ],
+    [
+      "^There is no replacement for //fast (.*)$",
+      "//fast $1 に代わるコマンドはありません"
+    ],
+    [
+      "^Region (width|height|length) too large for schematic: (.*)$",
+      "範囲がスケマティックには大きすぎます ($1): $2"
+    ],
+    [
+      "^Failed to write chunk list: (.*)$",
+      "チャンク一覧を書き込めませんでした: $1"
+    ],
+    [
+      "^You can mark more chunks for deletion, or to stop now, run: (.*)$",
+      "削除するチャンクをさらに追加できます。ここで終えるには次を実行してください: $1"
+    ],
+    [
+      "^Authors: (.*)$",
+      "作者: $1"
+    ],
+    [
+      "^Cannot find path: (.*)$",
+      "パスが見つかりません: $1"
+    ],
+    [
+      "^any ([A-Za-z_]+)$",
+      "任意の $1"
+    ]
+  ],
+  "tails": {
+    "Missing argument for ": {
+      ".": ""
+    }
+  }
+}

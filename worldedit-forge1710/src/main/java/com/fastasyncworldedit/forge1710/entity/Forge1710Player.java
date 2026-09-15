@@ -201,6 +201,7 @@ public class Forge1710Player extends AbstractPlayerActor {
     }
 
     private void send(String msg, @Nullable EnumChatFormatting color) {
+        msg = com.fastasyncworldedit.forge1710.CommandHelpTranslator.translate(msg, getLocale());
         if (LOG_CHAT) {
             LOGGER.info("[-> {}] {}", getName(), FORMATTING_CODE.matcher(msg).replaceAll(""));
         }
