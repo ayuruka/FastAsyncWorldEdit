@@ -220,7 +220,7 @@ public class Forge1710Platform extends AbstractPlatform {
 
     @Override
     public @Nonnull RelighterFactory getRelighterFactory() {
-        return (a, b, c) -> new Forge1710Relighter();
+        return (mode, world, queue) -> new Forge1710Relighter(world);
     }
 
     @Override

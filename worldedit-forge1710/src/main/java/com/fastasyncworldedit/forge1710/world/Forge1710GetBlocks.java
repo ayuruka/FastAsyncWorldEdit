@@ -194,6 +194,8 @@ public class Forge1710GetBlocks extends CharGetBlocks {
         // FAWE's defaults (no neighbour or block updates) allow writing straight into the chunk sections; World.setBlock is
         // only used when those side effects are requested. ExtendedBlockStorage's accessors are EndlessIDs-aware.
         boolean fast = !neighbors && !updates;
+        // //fast and other edits without the lighting side effect leave light untouched (fix it with //fixlighting).
+        boolean lighting = sideEffects == null || sideEffects.shouldApply(SideEffect.LIGHTING);
         ExtendedBlockStorage[] storages = chunk.getBlockStorageArray();
         int changedSections = 0;
         // Positions whose light emission changed (always relit) and whose opacity changed (relit for small edits).
@@ -302,7 +304,7 @@ public class Forge1710GetBlocks extends CharGetBlocks {
             }
         }
 
-        if (changedSections != 0) {
+        if (changedSections != 0 && lighting) {
             // Height maps and sky light now; the rest of the lighting (light below overhangs, block light sources) is
             // recomputed by vanilla's light population on the following chunk ticks.
 

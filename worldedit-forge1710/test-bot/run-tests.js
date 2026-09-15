@@ -598,6 +598,18 @@ async function runFeatureTests (session) {
   l = await light(nextToLamp)
   record('fast path: removing the glowstone darkens the cave', l.block === 0, `${joined(r)} / ${l.line}`)
 
+  // //fixlighting clears the chunk's light (REMOVE_FIRST) and recomputes it: the light source must light its neighbour again.
+  await select(lamp, lamp)
+  await command(session, '//set glowstone', { until: done })
+  await sleep(3000)
+  await select(cave1, cave2)
+  r = await command(session, '//fixlighting', { until: /light|error/i, maxMs: 60000 })
+  await sleep(2000)
+  l = await light(nextToLamp)
+  record('//fixlighting recomputes light from light sources', l.block === 14, `${joined(r)} / ${l.line}`)
+  await select(lamp, lamp)
+  await command(session, '//set air', { until: done })
+
   // Old MCEdit schematic with numeric ids, including a modded block above 255 (AddBlocks).
   const idReply = await command(session, `/faweselftest id minatocc_addblocks:mi_concrete`, { until: /\[SELFTEST\] id/ })
   const modId = Number((idReply.find(t => t.includes('[SELFTEST] id')) || '').split(': ').pop())
