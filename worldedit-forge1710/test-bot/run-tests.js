@@ -718,10 +718,10 @@ async function runSnapshotTests (session) {
   await command(session, `/summon EnderCrystal ${S1[0] + 2.5} 203 ${S1[2] + 2.5}`)
   await sleep(1000)
 
-  let r = await command(session, '/save-all', { until: /Saved the world|Save complete/i, maxMs: 60000 })
+  let r = await command(session, '/save-all', { until: /Saved the world|Save complete|保存が完了/i, maxMs: 60000 })
   await sleep(5000)
   const snapName = copySnapshot('fawe-test')
-  record('snapshot copied from the saved world', r.some(t => /Saved|Save complete/i.test(t)), `${joined(r)} / ${snapName}`)
+  record('snapshot copied from the saved world', r.some(t => /Saved|Save complete|保存が完了/i.test(t)), `${joined(r)} / ${snapName}`)
 
   await select(S1, S2)
   await command(session, '//cut -e', { until: /cut|error/i, maxMs: 60000 })
@@ -774,8 +774,9 @@ async function runBlockBagTests (session) {
   }
   const cleared = async () => {
     const r = await command(session, `/clear ${USERNAME}`)
-    const m = joined(r).match(/removing (\d+)/i)
-    return m ? Number(m[1]) : 0
+    // Crucible's reply is translated on Japanese servers: "removing N items" or "（N 個削除）"
+    const m = joined(r).match(/removing (\d+)|(\d+) 個削除/i)
+    return m ? Number(m[1] || m[2]) : 0
   }
 
   await command(session, `//pos1 ${B1.join(',')}`)
